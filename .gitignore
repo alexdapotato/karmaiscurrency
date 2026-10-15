@@ -1,0 +1,33 @@
+# Gradle
+.gradle/
+build/
+
+# IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# Minecraft runtime / generated data
+run/logs/
+run/crash-reports/
+run/world/
+run/saves/
+run/usercache.json
+run/banned-players.json
+run/banned-ips.json
+run/ops.json
+run/whitelist.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log

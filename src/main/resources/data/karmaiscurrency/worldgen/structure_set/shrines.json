@@ -1,0 +1,16 @@
+{
+  "placement": {
+    "type": "karmaiscurrency:shrine_rings",
+    "ring_distance_blocks": 1000,
+    "ring_spread_blocks": 100,
+    "points_per_ring": 8,
+    "ring_count": 20,
+    "salt": 137451
+  },
+  "structures": [
+    {
+      "structure": "karmaiscurrency:shrine",
+      "weight": 1
+    }
+  ]
+}

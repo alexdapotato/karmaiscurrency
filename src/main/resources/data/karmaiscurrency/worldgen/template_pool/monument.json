@@ -1,0 +1,25 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "karmaiscurrency:monumentv2",
+        "processors": "karmaiscurrency:shrine_foundation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "karmaiscurrency:monument2",
+        "processors": "karmaiscurrency:shrine_foundation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}
+
+

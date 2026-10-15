@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@langchain/anthropic": "^1.5.10"
+  }
+}

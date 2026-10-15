@@ -1,0 +1,45 @@
+{
+	"schemaVersion": 1,
+	"id": "karmaiscurrency",
+	"version": "${version}",
+	"name": "Karma as Currency",
+	"description": "A persistent Karma economy that rewards both virtuous and villainous playstyles.",
+	"authors": [
+		"Akisei"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/karmaiscurrency/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"akisei.karmacurrency.KarmaIsCurrency"
+		],
+		"client": [
+			"akisei.karmacurrency.client.KarmaIsCurrencyClient"
+		],
+		"fabric-datagen": [
+			"akisei.karmacurrency.client.KarmaIsCurrencyDataGenerator"
+		]
+	},
+	"mixins": [
+		"karmaiscurrency.mixins.json",
+		{
+			"config": "karmaiscurrency.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"suggests": {
+		"floodgate": "*",
+		"geyser": "*"
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

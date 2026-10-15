@@ -1,0 +1,3 @@
+-proc:none
+-XDshould-stop.at=PARSE
+@/tmp/kic_sources.txt

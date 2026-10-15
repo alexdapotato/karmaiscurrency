@@ -1,0 +1,3 @@
+-proc:none
+-XDshouldStopPolicy=PARSE
+src/main/java/akisei/karmacurrency/ShrineManager.java
