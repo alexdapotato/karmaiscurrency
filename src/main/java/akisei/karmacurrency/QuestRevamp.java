@@ -16,7 +16,7 @@ public final class QuestRevamp {
     public static final long WINDOW = 12L*60*60*1000;
     private static final Map<UUID, Sample> samples = new HashMap<>();
     private record Sample(ServerPlayer player, long tick, long[] stats, boolean eligible) {}
-    private static final String[] MOVEMENT = {"walk_one_cm","sprint_one_cm","crouch_one_cm","swim_one_cm","walk_under_water_one_cm","walk_on_water_one_cm","climb_one_cm","horse_one_cm","pig_one_cm","strider_one_cm","boat_one_cm","aviate_one_cm","minecart_one_cm"};
+    private static final Identifier[] MOVEMENT = {Stats.WALK_ONE_CM, Stats.SPRINT_ONE_CM, Stats.CROUCH_ONE_CM, Stats.SWIM_ONE_CM, Stats.WALK_UNDER_WATER_ONE_CM, Stats.WALK_ON_WATER_ONE_CM, Stats.CLIMB_ONE_CM, Stats.HORSE_ONE_CM, Stats.PIG_ONE_CM, Stats.STRIDER_ONE_CM, Stats.BOAT_ONE_CM, Stats.AVIATE_ONE_CM, Stats.MINECART_ONE_CM};
     private static final int[] WEIGHTS = {100,100,100,100,100,100,100,75,75,75,50,25,25};
     static long get(ServerPlayer p,String k) {return KarmaPlayerState.get(p,"q2_"+k);}
     static void put(ServerPlayer p,String k,long v) {KarmaPlayerState.set(p,"q2_"+k,v);}
@@ -146,7 +146,7 @@ public final class QuestRevamp {
             long tick=p.level().getServer().getTickCount();
             if(tick%200!=0)return;
             long[] now=new long[MOVEMENT.length];
-            for(int i=0;i<now.length;i++)now[i]=p.getStats().getValue(Stats.CUSTOM.get(Identifier.parse("minecraft:"+MOVEMENT[i])));
+            for(int i=0;i<now.length;i++)now[i]=p.getStats().getValue(Stats.CUSTOM.get(MOVEMENT[i]));
             Sample old=samples.put(p.getUUID(),new Sample(p,tick,now,eligible));
             if(!eligible||expired(p)||old==null||old.player()!=p||!old.eligible()||tick-old.tick()>200||tick<=old.tick())return;
             long credit=get(p,"credit");

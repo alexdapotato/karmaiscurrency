@@ -212,7 +212,7 @@ public final class CurseBlessingRegistry {
             case "temperance" -> "+3 Defense and -2 Attack Damage.";
             case "devil" -> "Dark commitment. Cannot use Light Shrines, removes Blessings, and grants +2 shared stack slots (individual caps unchanged). The commitment uses one Curse slot and one stack slot.";
             case "strength" -> "+0.5 damage dealt and +0.5 damage taken per stack. Maximum 3 stacks (legacy).";
-            case "hollow" -> "+9.5% movement speed, +1 block and entity interaction range, -4 HP.";
+            case "hollow" -> "+7.5% movement speed, +1 block and entity interaction range, -4 HP.";
             case "insomnia" -> "+15% movement speed normally, +5% while in combat for 2 minutes after taking damage, and -2 Attack Damage.";
             case "executioner" -> "+25% damage against targets below 40% HP; -20% against targets above 50% HP.";
             case "duelist" -> "+25% player damage, -30% PvE damage, -3 Defense.";

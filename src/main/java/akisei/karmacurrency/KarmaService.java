@@ -431,9 +431,10 @@ public final class KarmaService {
 
 	private static void decayKarma(ServerPlayer player) {
 		ShrineConfig config = ShrineConfig.current();
-		int minute = currentMinute(player);
+		int minute = decayMinute(player);
 		int last = KarmaPlayerState.getInt(player, "karma_decay_last");
-		if (last == 0) {
+		if (KarmaPlayerState.getInt(player, "karma_decay_playtime_v1") == 0 || minute < last) {
+            KarmaPlayerState.setInt(player, "karma_decay_playtime_v1", 1);
 			KarmaPlayerState.setInt(player, "karma_decay_last", minute);
 			return;
 		}
@@ -479,9 +480,9 @@ public final class KarmaService {
         var config = ShrineConfig.current();
         int interval = reputation ? config.reputationDecayIntervalMinutes : config.infamyDecayIntervalMinutes;
         String key = reputation ? "reputation_decay_last" : "infamy_decay_last";
-        int minute = currentMinute(player);
-        if (KarmaPlayerState.getInt(player, key + "_v2") == 0) {
-            KarmaPlayerState.setInt(player, key + "_v2", 1);
+        int minute = decayMinute(player);
+        if (KarmaPlayerState.getInt(player, key + "_playtime_v1") == 0 || minute < KarmaPlayerState.getInt(player, key)) {
+            KarmaPlayerState.setInt(player, key + "_playtime_v1", 1);
             KarmaPlayerState.setInt(player, key, minute);
             return;
         }
@@ -496,10 +497,12 @@ public final class KarmaService {
         for (String type : new String[]{"karma", "reputation", "infamy"}) {
             int interval = type.equals("karma") ? c.karmaDecayIntervalMinutes : type.equals("reputation") ? c.reputationDecayIntervalMinutes : c.infamyDecayIntervalMinutes;
             int last = KarmaPlayerState.getInt(player, type + "_decay_last");
-            int remaining = Math.max(0, interval - Math.max(0, currentMinute(player) - last));
+            String marker = type.equals("karma") ? "karma_decay_playtime_v1" : type + "_decay_last_playtime_v1";
+            int remaining = KarmaPlayerState.getInt(player, marker) == 0 ? interval
+                : Math.max(0, interval - Math.max(0, decayMinute(player) - last));
             int loss = type.equals("karma") ? Math.min(Math.abs(get(player) - naturalDecayFloor(player)), Math.max(1, (int)Math.ceil(Math.abs(get(player) - naturalDecayFloor(player)) * c.karmaDecayPercent / 100.0)))
                 : socialDecayAmount(type.equals("reputation") ? SocialCurrencyService.getReputation(player) : getInfamyPoints(player), type.equals("reputation") ? c.reputationDecayPercent : c.infamyDecayPercent);
-            result.append("\n").append(type).append(": ").append(type.equals("karma") ? format(loss) : loss).append(" decay; due in ").append(remaining).append("m");
+            result.append("\n").append(type).append(": ").append(type.equals("karma") ? format(loss) : loss).append(" decay; due in ").append(remaining).append(" online minutes");
         }
         return result.toString();
     }
@@ -538,5 +541,10 @@ public final class KarmaService {
 		if (objective == null) objective = scoreboard.addObjective(name, ObjectiveCriteria.DUMMY, Component.literal(displayName), ObjectiveCriteria.RenderType.INTEGER, false, null);
 		return objective;
 	}
+    /** Decay alone uses accumulated online ticks; other cooldown clocks stay unchanged. */
+    private static int decayMinute(ServerPlayer player) {
+        return player.getStats().getValue(net.minecraft.stats.Stats.CUSTOM.get(net.minecraft.stats.Stats.PLAY_TIME)) / 1200;
+    }
+
 	private static int currentMinute(ServerPlayer player) { return (int) (player.level().getGameTime() / 1200L); }
 }

@@ -771,7 +771,7 @@ public final class CurseBlessingService {
 
         setModifier(player, Attributes.MAX_HEALTH, PARASITE_MAX_HEALTH, -2.0, parasite);
 
-        setModifier(player, Attributes.MOVEMENT_SPEED, HOLLOW_MOVEMENT_SPEED, 0.095, hollow, AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
+        setModifier(player, Attributes.MOVEMENT_SPEED, HOLLOW_MOVEMENT_SPEED, 0.075, hollow, AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
         setModifier(player, Attributes.BLOCK_INTERACTION_RANGE, HOLLOW_BLOCK_INTERACTION_RANGE, 1.0, hollow);
         setModifier(player, Attributes.ENTITY_INTERACTION_RANGE, HOLLOW_ENTITY_INTERACTION_RANGE, 1.0, hollow);
         setModifier(player, Attributes.MAX_HEALTH, HOLLOW_MAX_HEALTH, -4.0, hollow);
