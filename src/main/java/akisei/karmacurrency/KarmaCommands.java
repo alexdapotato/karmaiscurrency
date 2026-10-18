@@ -24,9 +24,6 @@ public final class KarmaCommands {
 			dispatcher.register(
 				Commands.literal("karma")
 					.executes(context -> showBalance(context.getSource(), context.getSource().getPlayerOrException()))
-					.then(Commands.literal("choose")
-					.then(Commands.literal("light").executes(context -> chooseAlignment(context.getSource(), SocialCurrencyService.Stance.LIGHT)))
-					.then(Commands.literal("dark").executes(context -> chooseAlignment(context.getSource(), SocialCurrencyService.Stance.DARK))))
 				.then(Commands.literal("infamy")
 						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
 						.then(Commands.literal("add").then(infamyNode("add")))
@@ -38,7 +35,6 @@ public final class KarmaCommands {
 						.then(Commands.literal("remove").then(reputationNode("remove")))
 						.then(Commands.literal("set").then(reputationNode("set"))))
 					.then(questsCommand())
-					.then(debugCommand())
 					.then(Commands.literal("reload")
 						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
 						.executes(context -> reload(context.getSource())))
@@ -47,8 +43,39 @@ public final class KarmaCommands {
                 .executes(context -> questStatus(context.getSource()))
                 .then(Commands.literal("submit").executes(context -> QuestRevamp.submit(context.getSource().getPlayerOrException(),false)?1:0)
                     .then(Commands.literal("confirm").executes(context -> QuestRevamp.submit(context.getSource().getPlayerOrException(),true)?1:0))));
+            dispatcher.register(Commands.literal("choose")
+                .then(Commands.literal("light").executes(c -> chooseAlignment(c.getSource(), SocialCurrencyService.Stance.LIGHT)))
+                .then(Commands.literal("dark").executes(c -> chooseAlignment(c.getSource(), SocialCurrencyService.Stance.DARK))));
+            // Keep existing functionality, but expose concise operator-gated paths.
+            var admin = debugCommand().build();
+            var karma = dispatcher.getRoot().getChild("karma");
+            for (var child : admin.getChildren()) {
+                var secured = operatorNode(child);
+                karma.addChild(secured);
+                String alias = switch (child.getName()) {
+                    case "reputation" -> "rep";
+                    case "infamy", "sigil", "token", "commitment", "hunt", "rotation", "endurance", "challenger", "reward" -> child.getName();
+                    default -> null;
+                };
+                if (alias != null) dispatcher.register(Commands.literal(alias)
+                    .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                    .executes(child.getCommand() == null ? c -> { c.getSource().sendFailure(Component.literal("Choose a subcommand.")); return 0; } : child.getCommand())
+                    .redirect(secured));
+                if (child.getName().equals("quest")) {
+                    var quest = dispatcher.getRoot().getChild("quest");
+                    for (var sub : child.getChildren()) quest.addChild(operatorNode(sub));
+                }
+            }
+            KicAdminCommands.register(dispatcher);
+
 		});
 	}
+
+    private static com.mojang.brigadier.tree.CommandNode<CommandSourceStack> operatorNode(com.mojang.brigadier.tree.CommandNode<CommandSourceStack> node) {
+        var builder = node.createBuilder().requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER));
+        for (var child : node.getChildren()) builder.then(child);
+        return builder.build();
+    }
 
 	private static int questStatus(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
 		ServerPlayer player = source.getPlayerOrException();
@@ -138,12 +165,12 @@ public final class KarmaCommands {
 				.then(Commands.argument("player", EntityArgument.player())
 					.executes(context -> resetDebug(context.getSource(), EntityArgument.getPlayer(context, "player")))))
 			.then(Commands.literal("quest")
-				.then(Commands.literal("reset")
+				.then(Commands.literal("resetall")
 					.executes(context -> resetQuestDebug(context.getSource()))))
 			.then(debugHuntCommand())
 			.then(Commands.literal("commitment")
 				.then(Commands.argument("player", EntityArgument.player())
-					.then(Commands.argument("value", StringArgumentType.word())
+					.then(Commands.argument("value", StringArgumentType.word()).suggests((c,b) -> { b.suggest("devotion"); b.suggest("devil"); b.suggest("clear"); return b.buildFuture(); })
 						.executes(context -> debugCommitment(context.getSource(),
 							EntityArgument.getPlayer(context, "player"),
 							StringArgumentType.getString(context, "value"))))))
@@ -204,26 +231,26 @@ public final class KarmaCommands {
 			source.sendFailure(Component.literal("Could not start the debug Hunt. Check the max ongoing Hunts gamerule."));
 			return 0;
 		}
-		source.sendSuccess(() -> Component.literal("Started debug Hunt for " + hunted.getName().getString() + "."), true);
+		source.sendSuccess(() -> Component.literal("Started debug Hunt for " + hunted.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int debugHuntAdvance(CommandSourceStack source, int minutes) {
 		HuntService.debugAdvance(source.getServer(), minutes);
 		source.sendSuccess(() -> Component.literal("Advanced Hunt debug time by " + minutes + " minute(s).\n"
-			+ HuntService.status(source.getServer())), true);
+			+ HuntService.status(source.getServer())), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int debugHuntRelogin(CommandSourceStack source, ServerPlayer player) {
 		HuntService.debugRefreshLoginGrace(player);
-		source.sendSuccess(() -> Component.literal("Refreshed Hunt login grace for " + player.getName().getString() + "."), true);
+		source.sendSuccess(() -> Component.literal("Refreshed Hunt login grace for " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int debugHuntCompass(CommandSourceStack source, ServerPlayer player) {
 		if (!HuntService.requestCompass(source.getServer(), player)) return 0;
-		source.sendSuccess(() -> Component.literal("Issued a Hunt Compass to " + player.getName().getString() + "."), true);
+		source.sendSuccess(() -> Component.literal("Issued a Hunt Compass to " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -235,7 +262,7 @@ public final class KarmaCommands {
 			return 0;
 		}
 		source.sendSuccess(() -> Component.literal("Processed a debug Hunt kill: " + hunter.getName().getString()
-			+ " -> " + hunted.getName().getString() + "."), true);
+			+ " -> " + hunted.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -306,7 +333,7 @@ public final class KarmaCommands {
 		return Commands.literal("sigil")
 			.then(Commands.literal("add")
 				.then(Commands.argument("player", EntityArgument.player())
-					.then(Commands.argument("id", StringArgumentType.word())
+					.then(Commands.argument("id", StringArgumentType.word()).suggests((c, b) -> { CurseBlessingRegistry.curses().forEach(d -> b.suggest(d.id())); CurseBlessingRegistry.blessings().forEach(d -> b.suggest(d.id())); return b.buildFuture(); })
 						.executes(context -> debugSigilAdd(context.getSource(), EntityArgument.getPlayer(context, "player"),
 							StringArgumentType.getString(context, "id"), 5))
 						.then(Commands.argument("minutes", IntegerArgumentType.integer(1, 10080))
@@ -315,7 +342,7 @@ public final class KarmaCommands {
 								IntegerArgumentType.getInteger(context, "minutes")))))))
 			.then(Commands.literal("remove")
 				.then(Commands.argument("player", EntityArgument.player())
-					.then(Commands.argument("id", StringArgumentType.word())
+					.then(Commands.argument("id", StringArgumentType.word()).suggests((c, b) -> { CurseBlessingRegistry.curses().forEach(d -> b.suggest(d.id())); CurseBlessingRegistry.blessings().forEach(d -> b.suggest(d.id())); return b.buildFuture(); })
 						.executes(context -> debugSigilRemove(context.getSource(), EntityArgument.getPlayer(context, "player"),
 							StringArgumentType.getString(context, "id"))))));
 	}
@@ -361,7 +388,7 @@ public final class KarmaCommands {
 		return Commands.literal("blessing")
 			.then(Commands.literal("add")
 				.then(Commands.argument("player", EntityArgument.player())
-					.then(Commands.argument("id", StringArgumentType.word())
+					.then(Commands.argument("id", StringArgumentType.word()).suggests((c, b) -> { CurseBlessingRegistry.curses().forEach(d -> b.suggest(d.id())); CurseBlessingRegistry.blessings().forEach(d -> b.suggest(d.id())); return b.buildFuture(); })
 						.then(Commands.argument("minutes", IntegerArgumentType.integer(1, 10080))
 							.executes(context -> debugBlessing(context.getSource(), EntityArgument.getPlayer(context, "player"),
 								StringArgumentType.getString(context, "id"), IntegerArgumentType.getInteger(context, "minutes")))))));
@@ -374,7 +401,7 @@ public final class KarmaCommands {
 
 	private static ArgumentBuilder<CommandSourceStack, ?> targetAmountNode(String operation) {
 		return Commands.argument("player", EntityArgument.player())
-			.then(Commands.argument("amount", DoubleArgumentType.doubleArg(0.0, 1000000.0))
+			.then(Commands.argument("amount", DoubleArgumentType.doubleArg(operation.equals("set") ? -1000000.0 : 0.0, 1000000.0))
 				.executes(context -> debugKarma(
 					context.getSource(), EntityArgument.getPlayer(context, "player"),
 					DoubleArgumentType.getDouble(context, "amount"), operation)));
@@ -437,7 +464,7 @@ public final class KarmaCommands {
 	}
 
 	private static int showPoints(CommandSourceStack source, ServerPlayer player) {
-		source.sendSuccess(() -> Component.literal("Infamy Points: " + KarmaService.getInfamyPoints(player)), false);
+		source.sendSuccess(() -> Component.literal("Infamy: " + KarmaService.getInfamyPoints(player)), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -471,63 +498,68 @@ public final class KarmaCommands {
 	private static int setBalance(CommandSourceStack source, ServerPlayer player, double karma) {
 		int points = (int) Math.round(karma * KarmaService.POINTS_PER_KARMA);
 		KarmaService.set(player, points);
-		source.sendSuccess(() -> Component.literal("Set " + player.getName().getString() + "'s Karma to " + KarmaService.format(points)), true);
+		source.sendSuccess(() -> Component.literal("Set " + player.getName().getString() + "'s Karma to " + KarmaService.format(points)), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int debugKarma(CommandSourceStack source, ServerPlayer player, double amount, String operation) {
 		int points = (int) Math.round(amount * KarmaService.POINTS_PER_KARMA);
 		if (operation.equals("add")) {
-			KarmaService.add(player, points, "debug add");
+			KarmaService.add(player, points, "Debug add by " + source.getTextName());
 		} else if (operation.equals("remove")) {
-			KarmaService.add(player, -points, "debug remove");
+			KarmaService.add(player, -points, "Debug remove by " + source.getTextName());
 		} else {
 			KarmaService.set(player, points);
 		}
+        KicHistoryService.recordEvent(player, "Debug Karma " + operation + " by " + source.getTextName());
 		source.sendSuccess(() -> Component.literal("Debug Karma for " + player.getName().getString() + ": "
-			+ KarmaService.format(KarmaService.get(player))), true);
+			+ KarmaService.format(KarmaService.get(player))), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int debugInfamy(CommandSourceStack source, ServerPlayer player, int amount, String operation) {
 		if (operation.equals("add")) {
-			KarmaService.addInfamyPoints(player, amount, "debug add");
+			KarmaService.addInfamyPoints(player, amount, "Debug add by " + source.getTextName());
 		} else if (operation.equals("remove")) {
-			KarmaService.addInfamyPoints(player, -amount, "debug remove");
+			KarmaService.addInfamyPoints(player, -amount, "Debug remove by " + source.getTextName());
 		} else {
 			KarmaService.setInfamyPoints(player, amount);
 		}
+        KicHistoryService.recordEvent(player, "Debug Infamy " + operation + " by " + source.getTextName());
 		source.sendSuccess(() -> Component.literal("Debug Infamy for " + player.getName().getString() + ": "
-			+ KarmaService.getInfamyPoints(player)), true);
+			+ KarmaService.getInfamyPoints(player)), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int debugReputation(CommandSourceStack source, ServerPlayer player, int amount, String operation) {
 		if (operation.equals("add")) {
-			SocialCurrencyService.addReputation(player, amount, "debug add");
+			SocialCurrencyService.addReputation(player, amount, "Debug add by " + source.getTextName());
 		} else if (operation.equals("remove")) {
-			SocialCurrencyService.addReputation(player, -amount, "debug remove");
+			SocialCurrencyService.addReputation(player, -amount, "Debug remove by " + source.getTextName());
 		} else {
 			SocialCurrencyService.setReputation(player, amount);
 		}
+        KicHistoryService.recordEvent(player, "Debug Reputation " + operation + " by " + source.getTextName());
 		source.sendSuccess(() -> Component.literal("Debug Reputation for " + player.getName().getString() + ": "
-			+ SocialCurrencyService.getReputation(player)), true);
+			+ SocialCurrencyService.getReputation(player)), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int debugTokens(CommandSourceStack source, ServerPlayer player, int amount, String operation) {
+        int before = SocialTokenService.count(player);
 		if (operation.equals("add")) {
 			SocialTokenService.insert(player, amount);
 		} else {
 			int available = SocialTokenService.count(player);
 			if (available < amount) {
-				source.sendFailure(Component.literal("Player only has " + available + " Influence Token(s)."));
+				source.sendFailure(Component.literal("Player only has " + available + " Physical Influence."));
 				return 0;
 			}
 			SocialTokenService.remove(player, amount);
 		}
-		source.sendSuccess(() -> Component.literal("Debug Influence Tokens for " + player.getName().getString() + ": "
-			+ SocialTokenService.count(player)), true);
+		KicHistoryService.recordInfluence(player, SocialTokenService.count(player) - before, "Debug " + operation + " by " + source.getTextName());
+        source.sendSuccess(() -> Component.literal("Physical Influence for " + player.getName().getString() + ": "
+			+ SocialTokenService.count(player)), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -537,7 +569,7 @@ public final class KarmaCommands {
 			? "Cleared the title-based Karma cap override for " + player.getName().getString() + "."
 			: "Set " + player.getName().getString() + "'s Karma cap to "
 				+ KarmaService.format(KarmaService.currentCap(player)) + ".";
-		source.sendSuccess(() -> Component.literal(message), true);
+		source.sendSuccess(() -> Component.literal(message), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -550,8 +582,8 @@ public final class KarmaCommands {
 			return 0;
 		}
 		source.sendSuccess(() -> Component.literal("Materialized " + amount + " " + sourceCurrency
-			+ " into " + created + " Influence Token(s) at "
-			+ SocialCurrencyService.materializationPercent() + "%."), true);
+			+ " into " + created + " Physical Influence at "
+			+ SocialCurrencyService.materializationPercent() + "%."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -563,9 +595,9 @@ public final class KarmaCommands {
 				+ SocialCurrencyService.getStance(player) + "."));
 			return 0;
 		}
-		source.sendSuccess(() -> Component.literal("Redeemed " + amount + " Influence Token(s) into "
+		source.sendSuccess(() -> Component.literal("Redeemed " + amount + " Physical Influence into "
 			+ gained + " " + target.displayName() + " (tokens: " + before + " -> "
-			+ SocialTokenService.count(player) + ")."), true);
+			+ SocialTokenService.count(player) + ")."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -582,13 +614,13 @@ public final class KarmaCommands {
 		CurseBlessingService.removeAllCurses(player);
 		CurseBlessingService.removeAllBlessings(player);
 		CurseBlessingService.clearCommitment(player);
-		source.sendSuccess(() -> Component.literal("Reset Karma, Reputation, Infamy, Influence Tokens, and Quest state for " + player.getName().getString() + "."), true);
+		source.sendSuccess(() -> Component.literal("Reset Karma, Reputation, Infamy, Physical Influence, quests, sigils, and commitment for " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int resetQuestDebug(CommandSourceStack source) {
 		QuestService.resetAll(source.getServer());
-		source.sendSuccess(() -> Component.literal("Reset all active Hunt/Quest state, cooldowns, pending Hunt rewards, and Hunt debug time."), true);
+		source.sendSuccess(() -> Component.literal("Reset all active Hunt/Quest state, cooldowns, pending Hunt rewards, and Hunt debug time."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -605,14 +637,14 @@ public final class KarmaCommands {
 		}
 		if (commitment == CurseBlessingService.Commitment.NONE) {
 			CurseBlessingService.clearCommitment(player);
-			source.sendSuccess(() -> Component.literal("Cleared permanent commitment for " + player.getName().getString() + "."), true);
+			source.sendSuccess(() -> Component.literal("Cleared permanent commitment for " + player.getName().getString() + "."), false);
 			return Command.SINGLE_SUCCESS;
 		}
 		if (!CurseBlessingService.commit(player, commitment)) {
 			source.sendFailure(Component.literal("Could not apply that commitment."));
 			return 0;
 		}
-		source.sendSuccess(() -> Component.literal("Applied " + commitment + " to " + player.getName().getString() + "."), true);
+		source.sendSuccess(() -> Component.literal("Applied " + commitment + " to " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -632,7 +664,7 @@ public final class KarmaCommands {
 			return 0;
 		}
 		int stacks = isCurse ? CurseBlessingService.curseStack(player, normalized) : CurseBlessingService.blessingStack(player, normalized);
-		source.sendSuccess(() -> Component.literal("Added " + normalized + " Sigil (stacks: " + stacks + ") to " + player.getName().getString() + "."), true);
+		source.sendSuccess(() -> Component.literal("Added " + normalized + " Sigil (stacks: " + stacks + ") to " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -642,7 +674,7 @@ public final class KarmaCommands {
 			source.sendFailure(Component.literal("Sigil " + normalized + " is not active on " + player.getName().getString() + "."));
 			return 0;
 		}
-		source.sendSuccess(() -> Component.literal("Removed " + normalized + " Sigil from " + player.getName().getString() + "."), true);
+		source.sendSuccess(() -> Component.literal("Removed " + normalized + " Sigil from " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -660,7 +692,7 @@ public final class KarmaCommands {
 			}
 			source.sendSuccess(() -> Component.literal("Removed Curse " + normalizedId + " (" + previousStacks
 				+ " stack(s) cleared; active stacks: " + CurseBlessingService.curseStack(player, normalizedId) + ") from "
-				+ player.getName().getString() + "."), true);
+				+ player.getName().getString() + "."), false);
 			return Command.SINGLE_SUCCESS;
 		}
 		if (!CurseBlessingService.addCurse(player, normalizedId)) {
@@ -668,7 +700,7 @@ public final class KarmaCommands {
 			return 0;
 		}
 		source.sendSuccess(() -> Component.literal("Added " + normalizedId + " (stacks: "
-			+ CurseBlessingService.curseStack(player, normalizedId) + ") to " + player.getName().getString() + "."), true);
+			+ CurseBlessingService.curseStack(player, normalizedId) + ") to " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -682,7 +714,7 @@ public final class KarmaCommands {
 			return 0;
 		}
 		source.sendSuccess(() -> Component.literal("Added " + id + " for " + minutes + " minute(s) (stacks: "
-			+ CurseBlessingService.blessingStack(player, id) + ") to " + player.getName().getString() + "."), true);
+			+ CurseBlessingService.blessingStack(player, id) + ") to " + player.getName().getString() + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -748,13 +780,13 @@ public final class KarmaCommands {
 		int afterInfamy = KarmaService.getInfamyPoints(player);
 		KarmaIsCurrency.LOGGER.info("[DEBUG TRIGGER] event={} player={} karma={} -> {} infamy={} -> {}", event, player.getGameProfile().name(), KarmaService.format(before), KarmaService.format(after), beforeInfamy, afterInfamy);
 		source.sendSuccess(() -> Component.literal("Triggered " + event + " for " + player.getName().getString() + ". Karma "
-			+ KarmaService.format(before) + " -> " + KarmaService.format(after) + ", Infamy " + beforeInfamy + " -> " + afterInfamy), true);
+			+ KarmaService.format(before) + " -> " + KarmaService.format(after) + ", Infamy " + beforeInfamy + " -> " + afterInfamy), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int triggerShopCycle(CommandSourceStack source) {
 		long cycle = KicCycle.triggerDebugCycle();
-		source.sendSuccess(() -> Component.literal("Triggered KIC shop cycle " + cycle + ". The next real time boundary will still use the normal schedule."), true);
+		source.sendSuccess(() -> Component.literal("Triggered KIC shop cycle " + cycle + ". The next real time boundary will still use the normal schedule."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -763,14 +795,14 @@ public final class KarmaCommands {
 		int beforeRep = SocialCurrencyService.getReputation(player);
 		int beforeInfamy = KarmaService.getInfamyPoints(player);
 		int karmaDelta = KarmaService.debugDecayKarmaOnce(player);
-		// Social decay remains configurable and defaults to zero, so this still exercises
-		// that path without applying a second Karma decay pass.
-		KarmaService.maintainSocialCurrencies(player);
+		// Explicit admin trigger applies one interval without changing scheduled timers.
+		KarmaService.applySocialDecay(player, true);
+		KarmaService.applySocialDecay(player, false);
 		source.sendSuccess(() -> Component.literal("Triggered one Karma decay interval for " + player.getName().getString()
 			+ ". Karma " + KarmaService.format(beforeKarma) + " -> " + KarmaService.format(KarmaService.get(player))
 			+ " (" + (karmaDelta >= 0 ? "+" : "") + KarmaService.format(karmaDelta) + ")"
 			+ ", Reputation " + beforeRep + " -> " + SocialCurrencyService.getReputation(player)
-			+ ", Infamy " + beforeInfamy + " -> " + KarmaService.getInfamyPoints(player)), true);
+			+ ", Infamy " + beforeInfamy + " -> " + KarmaService.getInfamyPoints(player)), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -779,7 +811,7 @@ public final class KarmaCommands {
 		String result = ShrineManager.nearestShrineTarget(position, source.getServer())
 			.map(target -> target.generated().map(site -> "generated " + site.displayName() + " at " + site.position().toShortString())
 				.orElse("predicted shrine at " + target.position().getX() + ",? ," + target.position().getZ())).orElse("none");
-		source.sendSuccess(() -> Component.literal("Shrine debug scan: " + result), true);
+		source.sendSuccess(() -> Component.literal("Shrine debug scan: " + result), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -791,7 +823,7 @@ public final class KarmaCommands {
 		StatueNames.load();
 		KarmaShopCatalog.reload();
 		source.sendSuccess(() -> Component.literal(
-			"Reloaded Karma, shrine, quest, statue-name, and shop configuration. Existing shrine locations were not moved."), true);
+			"Reloaded Karma, shrine, quest, statue-name, and shop configuration. Existing shrine locations were not moved."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 

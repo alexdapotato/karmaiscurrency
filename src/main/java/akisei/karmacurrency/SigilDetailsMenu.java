@@ -160,16 +160,14 @@ public final class SigilDetailsMenu extends KarmaMenu {
 			classification.displayName() + (blessing ? " Blessing Sigil" : " Curse Sigil"), "Inspect before activating."));
 		display.setItem(DURATION, ShrineMenu.icon(duration == CurseBlessingRegistry.SigilDuration.TEMPORARY ? Items.CLOCK : Items.RECOVERY_COMPASS, "Duration",
 		duration == CurseBlessingRegistry.SigilDuration.TEMPORARY ? "Temporary: " + KicUiText.durationSeconds(CurseBlessingRegistry.blessing(id).durationMinutes() * 60L) + " per activation." : "Permanent."));
-		java.util.List<String> requirementLore = new java.util.ArrayList<>(requirements);
+		java.util.List<String> requirementLore = new java.util.ArrayList<>(requirements.stream().filter(line -> !line.startsWith("Cost:")).toList());
         requirementLore.addAll(KicUiText.costLines(player, blessing, id));
         requirementLore.add(blocker == null ? "Available now." : blocker);
 		display.setItem(REQUIREMENTS, ShrineMenu.icon(Items.PAPER, "Requirements",
 			requirementLore.toArray(String[]::new)));
         ItemStack requirementsIcon = display.getItem(REQUIREMENTS);
         requirementsIcon.set(net.minecraft.core.component.DataComponents.LORE,
-            new net.minecraft.world.item.component.ItemLore(requirementLore.stream().<Component>map(line ->
-                Component.literal(line).withStyle(line.startsWith("Missing:") ? net.minecraft.ChatFormatting.RED
-                    : line.startsWith("Ready:") ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.GRAY)).toList()));
+            new net.minecraft.world.item.component.ItemLore(KicUiText.lore(requirementLore.toArray(String[]::new))));
         display.setItem(STACKING, ShrineMenu.icon(Items.EXPERIENCE_BOTTLE, "Stacking",
             maxStacks == 1 ? "Not stackable." : "Current: " + stacks + " / " + maxStacks,
             maxStacks == 1 ? "Current: " + stacks + " / 1" : "Each activation adds one stack.",
@@ -178,11 +176,11 @@ public final class SigilDetailsMenu extends KarmaMenu {
 			KicUiText.projectedEffect(player, blessing, id, effectDescription),
 			KicUiText.commitmentWarning(blessing, id).isEmpty() ? "Review the effect before spending items." : KicUiText.commitmentWarning(blessing, id)));
 		display.setItem(confirmingCommitment ? CONFIRM_COMMITMENT : ACTIVATE, ShrineMenu.icon(blocker == null ? Items.EMERALD_BLOCK : Items.BARRIER,
-			blocker == null ? (confirmingCommitment ? "CONFIRM PERMANENT COMMITMENT" : "ACTIVATE SIGIL") : blocker,
+			blocker == null ? (confirmingCommitment ? "Confirm commitment" : "Activate sigil") : blocker,
 			blocker == null ? (confirmingCommitment ? KicUiText.commitmentWarning(blessing, id) : "Activate one stack.") : "Resolve the requirement shown above."));
         if (CurseBlessingService.canReleaseSigil(player, blessing, id)) display.setItem(40,
-            ShrineMenu.icon(Items.BARRIER, confirmingRemoval ? "CONFIRM REMOVE ALL STACKS" : "Remove this Sigil",
+            ShrineMenu.icon(Items.BARRIER, confirmingRemoval ? "Confirm removal" : "Remove this Sigil",
                 "Releases all " + stacks + " stacks and the type slot. No refund.", "Commitments use their own removal rules."));
-        display.setItem(BACK, ShrineMenu.icon(Items.ARROW, confirmingCommitment ? "Cancel commitment" : "Back", confirmingCommitment ? "Return to Sigil details without payment." : "Return to available Sigils."));
+        display.setItem(BACK, ShrineMenu.icon(Items.ARROW, confirmingCommitment || confirmingRemoval ? "Cancel" : "Back", confirmingCommitment ? "Return to Sigil details without payment." : "Return to available Sigils."));
 	}
 }

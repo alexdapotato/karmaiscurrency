@@ -68,9 +68,7 @@ public final class KarmaService {
 		updateHealthBonus(player, bounded, ShrineConfig.current());
 		if (bounded == current) return;
 		String sign = bounded > current ? "+" : "";
-		player.sendSystemMessage(Component.literal(
-			"Karma " + sign + format(bounded - current) + " (" + reason + ") | Total: " + format(bounded)
-		));
+		KicMessages.change(player, "Karma", bounded - current, reason);
 	}
 
 	public static void recordVillagerTrade(ServerPlayer player) {
@@ -142,7 +140,7 @@ public final class KarmaService {
 		SocialTokenService.insert(player, amount, SocialTokenService.Origin.NEUTRAL);
 		KicHistoryService.recordInfluence(player, amount, reason);
 		KarmaPlayerState.setInt(player, "dr_count_" + key, count + 1);
-		// Physical Influence change is announced once by SocialTokenService.
+		KicMessages.change(player, "Physical Influence", amount, reason);
 	}
 
 	/** Awards social currency without changing Karma. Used by offerings and other social-only events. */
@@ -180,7 +178,7 @@ public final class KarmaService {
 			} else {
 				int removed = SocialTokenService.removeUsable(player, -amount);
 				if (removed > 0) KicHistoryService.recordInfluence(player, -removed, reason);
-				// SocialTokenService announces the actual removal.
+				KicMessages.change(player, "Physical Influence", -removed, reason);
 			}
 		}
 		KarmaPlayerState.setInt(player, "dr_count_" + key, count + 1);
@@ -259,13 +257,13 @@ public final class KarmaService {
 		if (amount == 0) return;
 		ScoreAccess infamy = score(player, INFAMY_POINTS_OBJECTIVE, "Infamy");
 		int before = infamy.get();
-		int total = Math.max(0, before + amount);
+		int total = (int) Math.clamp((long) before + amount, 0L, Integer.MAX_VALUE);
 		infamy.set(total);
 		KicHistoryService.recordSocial(player, "Infamy", total - before, reason);
-		if (amount > 0 && !"Influence redemption".equals(reason) && !"shop purchase refund".equals(reason)) {
-			CommunityProgressionService.recordInfamy(player, amount);
+		if (amount > 0 && !reason.toLowerCase(java.util.Locale.ROOT).startsWith("debug") && !"Influence redemption".equals(reason) && !"shop purchase refund".equals(reason)) {
+			CommunityProgressionService.recordInfamy(player, total - before);
 		}
-		player.sendSystemMessage(Component.literal("Infamy " + (total > before ? "+" : "") + (total - before) + " (" + reason + ") | Total: " + total));
+		KicMessages.change(player, "Infamy", total - before, reason);
 	}
 
 	public static void setInfamyPoints(ServerPlayer player, int amount) {
@@ -282,7 +280,7 @@ public final class KarmaService {
 		if (amount <= 0 || getInfamyPoints(player) < amount) throw new IllegalArgumentException("Insufficient Infamy");
 		score(player, INFAMY_POINTS_OBJECTIVE, "Infamy").add(-amount);
 		KicHistoryService.recordSocial(player, "Infamy", -amount, "spent Infamy");
-        player.sendSystemMessage(Component.literal("Infamy -" + amount + " | Total: " + getInfamyPoints(player)));
+        KicMessages.change(player, "Infamy", -amount, "purchase / conversion");
 	}
 
 	public static void set(ServerPlayer player, int points) {
@@ -330,7 +328,7 @@ public final class KarmaService {
 		updateHealthBonus(player, bounded, ShrineConfig.current());
 		KicHistoryService.recordKarma(player, bounded - before, reason);
         String sign = bounded > before ? "+" : "";
-		player.sendSystemMessage(Component.literal("Karma " + sign + format(bounded - before) + " (" + reason + ") | Total: " + format(bounded)));
+		KicMessages.change(player, "Karma", bounded - before, reason);
 	}
 
 	public static int getShrineCompassCooldownMinutes(ServerPlayer player) {
@@ -423,6 +421,8 @@ public final class KarmaService {
 		if (next != current) {
 			SocialCurrencyService.getStance(player); // Capture alignment before crossing a threshold.
 			score(player).set(next);
+                KicHistoryService.recordKarma(player, next - current, "natural decay");
+                KicMessages.change(player, "Karma", next - current, "natural decay");
 			SocialCurrencyService.getStance(player);
 			updateHealthBonus(player, next, config);
 		}
@@ -453,6 +453,8 @@ public final class KarmaService {
 			if (next != current) {
 				SocialCurrencyService.getStance(player); // Capture alignment before crossing a threshold.
 				score(player).set(next);
+                KicHistoryService.recordKarma(player, next - current, "natural decay");
+                KicMessages.change(player, "Karma", next - current, "natural decay");
 				SocialCurrencyService.getStance(player);
 				updateHealthBonus(player, next, config);
 			}
@@ -460,23 +462,47 @@ public final class KarmaService {
 		KarmaPlayerState.setInt(player, "karma_decay_last", minute);
 	}
 
-	private static void decaySocial(ServerPlayer player, boolean reputation) {
-		ShrineConfig config = ShrineConfig.current();
-		String objectiveName = reputation ? SocialCurrencyService.REPUTATION_DECAY_OBJECTIVE : INFAMY_DECAY_OBJECTIVE;
-		int interval = reputation ? config.reputationDecayIntervalMinutes : config.infamyDecayIntervalMinutes;
-		int amountPer = reputation ? config.reputationDecayPerInterval : config.infamyDecayPerInterval;
-		String timerKey = reputation ? "reputation_decay_last" : "infamy_decay_last";
-		int last = KarmaPlayerState.getInt(player, timerKey);
-		int minute = currentMinute(player);
-		if (minute - last < interval) return;
-		int intervals = (minute - last) / interval;
-		int amount = intervals * amountPer;
-		if (amount > 0) {
-			if (reputation) SocialCurrencyService.addReputation(player, -Math.min(SocialCurrencyService.getReputation(player), amount), "natural decay");
-			else addInfamyPoints(player, -Math.min(getInfamyPoints(player), amount), "natural decay");
-		}
-		KarmaPlayerState.setInt(player, timerKey, minute);
-	}
+    public static int socialDecayAmount(int balance, int percent) {
+        return KicBalanceRules.socialDecay(balance, percent);
+    }
+    public static int applySocialDecay(ServerPlayer player, boolean reputation) {
+        var config = ShrineConfig.current();
+        int balance = reputation ? SocialCurrencyService.getReputation(player) : getInfamyPoints(player);
+        int loss = socialDecayAmount(balance, reputation ? config.reputationDecayPercent : config.infamyDecayPercent);
+        if (loss > 0) {
+            if (reputation) SocialCurrencyService.addReputation(player, -loss, "natural decay");
+            else addInfamyPoints(player, -loss, "natural decay");
+        }
+        return loss;
+    }
+    private static void decaySocial(ServerPlayer player, boolean reputation) {
+        var config = ShrineConfig.current();
+        int interval = reputation ? config.reputationDecayIntervalMinutes : config.infamyDecayIntervalMinutes;
+        String key = reputation ? "reputation_decay_last" : "infamy_decay_last";
+        int minute = currentMinute(player);
+        if (KarmaPlayerState.getInt(player, key + "_v2") == 0) {
+            KarmaPlayerState.setInt(player, key + "_v2", 1);
+            KarmaPlayerState.setInt(player, key, minute);
+            return;
+        }
+        int last = KarmaPlayerState.getInt(player, key);
+        int intervals = Math.max(0, (minute - last) / interval);
+        for (int i = 0; i < intervals; i++) if (applySocialDecay(player, reputation) == 0) break;
+        if (intervals > 0) KarmaPlayerState.setInt(player, key, last + intervals * interval);
+    }
+    public static String decayPreview(ServerPlayer player) {
+        var c = ShrineConfig.current();
+        StringBuilder result = new StringBuilder("Decay for " + player.getName().getString());
+        for (String type : new String[]{"karma", "reputation", "infamy"}) {
+            int interval = type.equals("karma") ? c.karmaDecayIntervalMinutes : type.equals("reputation") ? c.reputationDecayIntervalMinutes : c.infamyDecayIntervalMinutes;
+            int last = KarmaPlayerState.getInt(player, type + "_decay_last");
+            int remaining = Math.max(0, interval - Math.max(0, currentMinute(player) - last));
+            int loss = type.equals("karma") ? Math.min(Math.abs(get(player) - naturalDecayFloor(player)), Math.max(1, (int)Math.ceil(Math.abs(get(player) - naturalDecayFloor(player)) * c.karmaDecayPercent / 100.0)))
+                : socialDecayAmount(type.equals("reputation") ? SocialCurrencyService.getReputation(player) : getInfamyPoints(player), type.equals("reputation") ? c.reputationDecayPercent : c.infamyDecayPercent);
+            result.append("\n").append(type).append(": ").append(type.equals("karma") ? format(loss) : loss).append(" decay; due in ").append(remaining).append("m");
+        }
+        return result.toString();
+    }
 
 
 	/** Each full interval above 100 absolute Karma grants one health point (half a heart). */

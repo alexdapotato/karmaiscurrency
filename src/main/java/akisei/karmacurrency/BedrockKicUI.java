@@ -247,7 +247,7 @@ public final class BedrockKicUI {
             + "\nAlignment: " + KicUiText.alignmentStatus(player)
             + "\nReputation: " + SocialCurrencyService.getReputation(player)
             + "\nInfamy: " + KarmaService.getInfamyPoints(player)
-            + "\nInfluence: " + SocialTokenService.count(player);
+            + "\nPhysical Influence: " + SocialTokenService.count(player);
 
         List<Choice> choices = new ArrayList<>();
         boolean sigilsEnabled = KarmaGameRules.enabled(player, KarmaGameRules.SIGILS_ENABLED)
@@ -328,7 +328,7 @@ public final class BedrockKicUI {
             addBedrockQuestChoice(player, site, onBack, choices, QuestService.QuestId.HUNT);
         } else {
             choices.add(choice("The Hunt [DISABLED]", ICON_BACK, () -> {
-                tell(player, "The Hunt is disabled by the quests_enabled gamerule.");
+                tell(player, "The Hunt is disabled in this world.");
                 showQuests(player, site, onBack);
             }));
         }
@@ -341,7 +341,7 @@ public final class BedrockKicUI {
         choices.add(choice("Back", ICON_BACK, onBack));
         StringBuilder content = new StringBuilder(questsEnabled
             ? "Shared KIC cycle. " + QuestService.nextCycleStatus()
-            : "Quests are disabled by the quests_enabled gamerule. Duels remain controlled independently.\n")
+            : "Quests are disabled in this world.\n")
             .append("\nActive Quest: ");
         if (active.isEmpty()) content.append("None (0/1).");
         else content.append(active.getFirst().displayName()).append(" (1/1).\n").append(QuestService.status(player, active.getFirst()));
@@ -653,7 +653,7 @@ public final class BedrockKicUI {
             maxStacks = definition.maxStacks();
             classification = definition.classification();
             duration = definition.duration();
-            requirements = definition.requirements();
+            requirements = definition.requirements().stream().filter(line -> !line.startsWith("Cost:")).toList();
             effect = definition.effectDescription();
         } else {
             CurseBlessingRegistry.CurseDefinition definition = CurseBlessingRegistry.curse(id);
@@ -661,7 +661,7 @@ public final class BedrockKicUI {
             maxStacks = definition.maxStacks();
             classification = definition.classification();
             duration = definition.duration();
-            requirements = definition.requirements();
+            requirements = definition.requirements().stream().filter(line -> !line.startsWith("Cost:")).toList();
             effect = definition.effectDescription();
         }
 
@@ -673,7 +673,7 @@ public final class BedrockKicUI {
         String durationText = duration == CurseBlessingRegistry.SigilDuration.PERMANENT
             ? "Permanent" : configuredDuration + " minutes per activation";
         String requirementText = requirements.isEmpty() ? "No requirements are registered."
-            : String.join("\n", requirements) + "\n" + String.join("\n", KicUiText.costLines(player, blessing, id));
+            : String.join("\n", requirements.stream().filter(line -> !line.startsWith("Cost:")).toList()) + "\n" + String.join("\n", KicUiText.costLines(player, blessing, id));
 
         if (!currentlyLive && existingStacks > 0) currentBlocker = "This Sigil rotated out; existing stacks remain active, but it cannot be activated again until it returns.";
         final String blocker = currentBlocker;
@@ -736,20 +736,20 @@ public final class BedrockKicUI {
             name = definition.name();
             maxStacks = definition.maxStacks();
             duration = definition.duration();
-            requirements = definition.requirements();
+            requirements = definition.requirements().stream().filter(line -> !line.startsWith("Cost:")).toList();
         } else {
             var definition = CurseBlessingRegistry.curse(id);
             name = definition.name();
             maxStacks = definition.maxStacks();
             duration = definition.duration();
-            requirements = definition.requirements();
+            requirements = definition.requirements().stream().filter(line -> !line.startsWith("Cost:")).toList();
         }
         int configuredDuration = blessing ? CurseBlessingRegistry.blessing(id).durationMinutes() : 0;
         String durationText = duration == CurseBlessingRegistry.SigilDuration.PERMANENT
             ? "Permanent" : configuredDuration + " minutes per activation";
         CustomForm.Builder form = CustomForm.builder()
             .title(name + " — Requirements")
-            .label("Requirements\n" + (requirements.isEmpty() ? "No requirements are registered." : String.join("\n", requirements)))
+            .label("Requirements\n" + (requirements.isEmpty() ? "No requirements are registered." : String.join("\n", requirements.stream().filter(line -> !line.startsWith("Cost:")).toList())))
             .label(String.join("\n", KicUiText.costLines(player, blessing, id)))
             .label("Maximum stacks: " + maxStacks)
             .label("Duration: " + durationText)
@@ -780,10 +780,10 @@ public final class BedrockKicUI {
         List<String> requirements = blessing ? CurseBlessingRegistry.blessing(id).requirements()
             : CurseBlessingRegistry.curse(id).requirements();
         String materialCost = blessing
-            ? CurseBlessingRegistry.costDescription(CurseBlessingRegistry.blessing(id).cost())
-            : CurseBlessingRegistry.costDescription(CurseBlessingRegistry.curse(id).cost());
-        String content = KicUiText.commitmentWarning(blessing, id) + "\n\n" + String.join("\n", KicUiText.costLines(player, blessing, id)) + "\n\nEffect:\n" + effect + "\n\nCost:\n" + materialCost + "\n\nRequirements:\n" + String.join("\n", requirements)
-            + "\n\nKIC will recheck the sigil and your current state before activation.";
+            ? CurseBlessingRegistry.costDescription(CurseBlessingService.activationCosts(player, true, id))
+            : CurseBlessingRegistry.costDescription(CurseBlessingService.activationCosts(player, false, id));
+        String content = KicUiText.commitmentWarning(blessing, id) + "\n\n" + String.join("\n", KicUiText.costLines(player, blessing, id)) + "\n\nEffect:\n" + effect + "\n\nCost:\n" + materialCost + "\n\nRequirements:\n" + String.join("\n", requirements.stream().filter(line -> !line.startsWith("Cost:")).toList())
+            + "\n\nConfirm to activate one stack.";
         ModalForm.Builder form = ModalForm.builder()
             .title("Activate " + name + "?")
             .content(content)
@@ -888,7 +888,7 @@ public final class BedrockKicUI {
             return;
         }
         List<Choice> choices = List.of(choice("Back", ICON_BACK, onBack));
-        simple(player, "Titles", String.join("\n", QuestService.recognition(player)), choices);
+        simple(player, "Titles", "Earned recognition\n" + QuestService.recognition(player).stream().filter(line -> line.startsWith("First completion:")).collect(java.util.stream.Collectors.joining("\n")) + "\n\nContribution milestones\n" + CommunityProgressionService.personalContributionSummary(player), choices);
     }
 
     private static void showTitleDetails(ServerPlayer player, int index, String name, int threshold,
@@ -900,7 +900,7 @@ public final class BedrockKicUI {
         String state = current ? "Current stage" : unlocked ? "Unlocked" : "Locked";
         String thresholdText = threshold == 0 ? "Starting stage." : "Requires " + threshold + " Karma.";
         CustomForm.Builder form = CustomForm.builder()
-            .title(name.toUpperCase(java.util.Locale.ROOT))
+            .title(name)
             .label("State: " + state)
             .label("Your Karma: " + KarmaService.format(KarmaService.get(player)))
             .label("Personal stage: " + currentStage + "/4")
@@ -929,16 +929,16 @@ public final class BedrockKicUI {
             + "\nAlignment: " + KicUiText.alignmentStatus(player)
             + "\nReputation: " + SocialCurrencyService.getReputation(player)
             + "\nInfamy: " + KarmaService.getInfamyPoints(player)
-            + "\nInfluence: " + redeemableTokens
-            + "\n\nOffer accepted items to create additional social currency.\n" + offeringEconomySummary();
+            + "\nPhysical Influence: " + redeemableTokens
+            + "\n\nRedeem: uses eligible token origins and redemption rates.\nOffer: accepts any origin, with offering tax and minimum.\nOffer items to earn Influence.\n" + offeringEconomySummary();
 
         List<Choice> choices = new ArrayList<>();
         choices.add(choice("Materialize " + target.displayName(), "textures/items/echo_shard.png",
             () -> showSocialAmountForm(player, false, target, Math.max(1, Math.min(64, materializationBalance)), onBack)));
-        choices.add(choice("Redeem Influence", "textures/items/emerald.png",
+        choices.add(choice("Redeem Physical Influence", "textures/items/emerald.png",
             () -> showSocialAmountForm(player, true, target, Math.max(1, Math.min(64, redeemableTokens)), onBack)));
         if (KarmaGameRules.enabled(player, KarmaGameRules.OFFERINGS_ENABLED)) {
-            choices.add(choice("Dematerialize Influence (any origin)", "textures/items/echo_shard.png",
+            choices.add(choice("Offer Physical Influence (any origin)", "textures/items/echo_shard.png",
                 () -> showInfluenceDematerialization(player, onBack)));
             choices.add(choice("Offer Items", "textures/items/gold_ingot.png",
                 () -> showOfferings(player, onBack)));
@@ -988,7 +988,10 @@ public final class BedrockKicUI {
         confirm.validResultHandler(result -> guarded(player, () -> {
             if (!result.clickedFirst()) {
                 if (KarmaService.rewardAlignment(player) != target) tell(player, "Alignment changed. Please review the conversion again.");
-                else tell(player, SocialCurrencyService.dematerializeInfluence(player, amount).message());
+                else {
+                    var conversion = SocialCurrencyService.dematerializeInfluence(player, amount);
+                    if (!conversion.successful()) tell(player, conversion.message());
+                }
             }
             showSocialCurrency(player, onBack);
         }));
@@ -997,7 +1000,7 @@ public final class BedrockKicUI {
 
     private static void showSocialAmountForm(ServerPlayer player, boolean redeem,
             SocialCurrencyService.RedemptionTarget target, int selected, Runnable onBack) {
-        int available = redeem ? SocialTokenService.count(player)
+        int available = redeem ? SocialCurrencyService.redeemableInfluence(player)
             : SocialCurrencyService.getStance(player) == SocialCurrencyService.Stance.DARK
                 ? KarmaService.getInfamyPoints(player) : SocialCurrencyService.getReputation(player);
         int amount = WorldContributionAmounts.adjust(selected, 0, available);
@@ -1012,14 +1015,14 @@ public final class BedrockKicUI {
         choices.add(choice("Review " + amount, "textures/items/echo_shard.png",
             () -> confirmSocialConversion(player, redeem, Integer.toString(amount), onBack)));
         choices.add(choice("Back", ICON_BACK, () -> showSocialCurrency(player, onBack)));
-        simple(player, redeem ? "Redeem Influence" : "Materialize currency",
+        simple(player, redeem ? "Redeem Physical Influence" : "Materialize currency",
             "Selected: " + amount + "\nAvailable: " + available + "\nConfirm on the next screen.", choices);
     }
 
     private static void showSocialExactInput(ServerPlayer player, boolean redeem,
             SocialCurrencyService.RedemptionTarget target, int defaultAmount, Runnable onBack) {
         CustomForm.Builder form = CustomForm.builder()
-            .title(redeem ? "Redeem Influence" : "Materialize Currency")
+            .title(redeem ? "Redeem Physical Influence" : "Materialize Currency")
             .input("Amount", "Whole number", Integer.toString(defaultAmount));
         form.validResultHandler(response -> guarded(player, () -> {
             String raw = response.asInput();
@@ -1057,12 +1060,12 @@ public final class BedrockKicUI {
             ? (stance == SocialCurrencyService.Stance.NEUTRAL
                 ? SocialCurrencyService.neutralRedemptionPercent() : SocialCurrencyService.alignedRedemptionPercent()) + "% redemption rate"
             : SocialCurrencyService.materializationPercent() + "% materialization rate";
-        int availableInfluence = SocialTokenService.count(player);
+        int availableInfluence = redeem ? SocialCurrencyService.redeemableInfluence(player) : SocialTokenService.count(player);
         ModalForm.Builder form = ModalForm.builder()
             .title(redeem ? "Redeem Influence?" : "Materialize Currency?")
             .content(action + "\nCurrent alignment: " + KicUiText.alignmentStatus(player) + "\n" + rate
                 + "\nInfluence currently available: " + availableInfluence
-                + "\n\nKIC will recheck your current balance, token origins, and conversion rules.")
+                + "\nReceive: " + (int)((long)amount * (redeem ? (stance == SocialCurrencyService.Stance.NEUTRAL ? SocialCurrencyService.neutralRedemptionPercent() : SocialCurrencyService.alignedRedemptionPercent()) : SocialCurrencyService.materializationPercent()) / 100) + (redeem ? " " + target.displayName() : " Physical Influence"))
             .button1("Cancel").button2("Convert");
         form.validResultHandler(response -> guarded(player, () -> {
             if (response.clickedFirst()) {
@@ -1111,7 +1114,7 @@ public final class BedrockKicUI {
                 ? SocialCurrencyService.materializeReputation(player, amount)
                 : SocialCurrencyService.materializeInfamy(player, amount);
             if (created <= 0) tell(player, "That amount could not be materialized.");
-            else tell(player, "Materialized " + amount + " " + target.displayName() + " into " + created + " Influence.");
+            
         } else {
             SocialTokenService.Origin origin = switch (stance) {
                 case LIGHT -> SocialTokenService.Origin.LIGHT;
@@ -1132,7 +1135,7 @@ public final class BedrockKicUI {
                 tell(player, "These Influence tokens cannot be redeemed into " + target.displayName()
                     + " with your current alignment and redemption rate.");
             } else {
-                tell(player, "Redeemed " + amount + " Influence for " + redeemed + " " + target.displayName() + ".");
+                // Shared conversion receipt is emitted by the service.
             }
         }
         showSocialCurrency(player, onBack);
@@ -1154,7 +1157,7 @@ public final class BedrockKicUI {
             items.add(item);
             choices.add(choice(
                 new ItemStack(item).getHoverName().getString()
-                    + " (" + owned + " available; " + (item == Items.OMINOUS_BOTTLE ? "6–16 value by level" : value + " value each") + ")",
+                    + " (" + owned + " available; " + (item == Items.OMINOUS_BOTTLE ? "6–16 value by level" : KicUiText.number(value) + " value each") + ")",
                 ICON_LIGHT,
                 () -> showOfferingAmount(player, item, onBack)));
         }
@@ -1187,7 +1190,7 @@ public final class BedrockKicUI {
             .title("Offer Items")
             .label("Offering: " + new ItemStack(item).getHoverName().getString()
                 + "\nYou have " + owned + " available.\n"
-                + (item == Items.OMINOUS_BOTTLE ? "Value: 6 + 2.5 × (bottle level − 1), from 6–16.\n" : "Value: " + value + " social currency each.\n")
+                + (item == Items.OMINOUS_BOTTLE ? "Value: 6 + 2.5 × (bottle level − 1), from 6–16.\n" : "Value: " + KicUiText.number(value) + " Influence each.\n")
                 + offeringEconomySummary())
             .input("Amount", "Whole number", "1");
         form.validResultHandler(response -> guarded(player, () -> {
@@ -1225,7 +1228,7 @@ public final class BedrockKicUI {
                     return;
                 }
                 SocialCurrencyService.OfferingResult result = SocialCurrencyService.offerItem(player, item, amount);
-                tell(player, result.message());
+                if (!result.successful()) tell(player, result.message());
                 showOfferings(player, onBack);
             }));
             send(player, confirm);
@@ -1250,8 +1253,8 @@ public final class BedrockKicUI {
         CommunityProgressionService community = CommunityProgressionService.get(player.level().getServer());
         int stage = community.stage();
         int pool = community.pool();
-        int previous = CommunityProgressionService.thresholdForStage(stage);
-        int next = CommunityProgressionService.nextStageThreshold(stage);
+        int previous = CommunityProgressionService.get(player.level().getServer()).thresholdForStage(stage);
+        int next = CommunityProgressionService.get(player.level().getServer()).nextStageThreshold(stage);
         int progress = next > previous ? Math.clamp(pool - previous, 0, next - previous) : next - previous;
         int percent = next > previous ? progress * 100 / (next - previous) : 100;
         int filled = next > previous ? progress * 5 / (next - previous) : 5;
@@ -1273,42 +1276,42 @@ public final class BedrockKicUI {
             + "\n" + nextStageLine
             + "\n\n" + String.join("\n", CommunityProgressionService.nextStagePreview(player))
             + "\n\n" + CommunityProgressionService.personalContributionSummary(player)
-            + "\nYour Influence: " + SocialTokenService.count(player)
+            + "\nYour Influence: " + CommunityProgressionService.availableInfluence(player)
             + "\nKarma cap: " + KarmaService.format(KarmaService.currentCap(player));
 
         List<Choice> choices = new ArrayList<>();
         choices.add(choice("Choose submission amount", "textures/items/echo_shard.png",
             () -> showWorldAmountSelector(player, 0, onBack)));
         choices.add(choice("Back", ICON_BACK, onBack));
-        simple(player, "World Progression", summary + "\n\nLight, Neutral, and Dark Influence all contribute to the same pool.", choices);
+        simple(player, "World Progression", summary + "\n\nReputation and Infamy contribute to the same pool.", choices);
     }
 
     private static void showWorldAmountSelector(ServerPlayer player, int selected, Runnable onBack) {
-        int available = SocialTokenService.count(player);
+        int available = CommunityProgressionService.availableInfluence(player);
         int amount = WorldContributionAmounts.adjust(selected, 0, available);
         CommunityProgressionService data = CommunityProgressionService.get(player.level().getServer());
         int fill = WorldContributionAmounts.fill(available, data.pool(),
-            CommunityProgressionService.nextStageThreshold(data.stage()), data.stage() >= CommunityProgressionService.MAX_STAGE);
+            CommunityProgressionService.get(player.level().getServer()).nextStageThreshold(data.stage()), data.stage() >= CommunityProgressionService.MAX_STAGE);
         List<Choice> choices = new ArrayList<>();
         choices.add(choice("Type exact amount", "textures/items/echo_shard.png",
             () -> showWorldAmountInput(player, amount, onBack)));
         for (int delta : new int[] {-100, -10, -1, 1, 10, 100}) {
             choices.add(choice((delta > 0 ? "+" : "") + delta, "textures/items/echo_shard.png",
-                () -> showWorldAmountSelector(player, WorldContributionAmounts.adjust(amount, delta, SocialTokenService.count(player)), onBack)));
+                () -> showWorldAmountSelector(player, WorldContributionAmounts.adjust(amount, delta, CommunityProgressionService.availableInfluence(player)), onBack)));
         }
         choices.add(choice("Fill next stage (" + fill + ")", "textures/items/end_crystal.png",
             () -> {
                 CommunityProgressionService current = CommunityProgressionService.get(player.level().getServer());
-                showWorldAmountSelector(player, WorldContributionAmounts.fill(SocialTokenService.count(player), current.pool(),
-                    CommunityProgressionService.nextStageThreshold(current.stage()), current.stage() >= CommunityProgressionService.MAX_STAGE), onBack);
+                showWorldAmountSelector(player, WorldContributionAmounts.fill(CommunityProgressionService.availableInfluence(player), current.pool(),
+                    CommunityProgressionService.get(player.level().getServer()).nextStageThreshold(current.stage()), current.stage() >= CommunityProgressionService.MAX_STAGE), onBack);
             }));
-        choices.add(choice("Submit maximum (" + available + ")", "textures/items/echo_shard.png",
-            () -> showWorldAmountSelector(player, SocialTokenService.count(player), onBack)));
+        choices.add(choice("Select maximum (" + available + ")", "textures/items/echo_shard.png",
+            () -> showWorldAmountSelector(player, CommunityProgressionService.availableInfluence(player), onBack)));
         choices.add(choice("Review submission: " + amount, "textures/items/echo_shard.png",
             () -> submitWorldContribution(player, amount, onBack)));
         choices.add(choice("Back", ICON_BACK, () -> showWorldProgression(player, onBack)));
         simple(player, "Contribution amount", "Selected: " + amount + " Influence"
-            + "\nAvailable physical Influence: " + available
+            + "\nAvailable stored Influence: " + available
             + "\nCommunity pool: " + data.pool() + " -> " + ((long) data.pool() + amount)
             + "\nUse the buttons or type an exact whole number. Nothing is spent until confirmation.", choices);
     }
@@ -1316,12 +1319,12 @@ public final class BedrockKicUI {
     private static void showWorldAmountInput(ServerPlayer player, int selected, Runnable onBack) {
         // Input is the first and only component: no label/response cursor ambiguity.
         CustomForm.Builder form = CustomForm.builder().title("World contribution")
-            .input("Physical Influence to submit (available: " + SocialTokenService.count(player) + ")",
+            .input("Stored Influence to submit (available: " + CommunityProgressionService.availableInfluence(player) + ")",
                 "Positive whole number", Integer.toString(Math.max(1, selected)));
         form.validResultHandler(response -> guarded(player, () -> {
             int amount = WorldContributionAmounts.parse(response.asInput());
-            if (amount <= 0 || amount > SocialTokenService.count(player)) {
-                tell(player, "Enter a positive whole number no greater than your physical Influence. You can also use the amount buttons.");
+            if (amount <= 0 || amount > CommunityProgressionService.availableInfluence(player)) {
+                tell(player, "Enter a positive whole number no greater than your stored Influence. You can also use the amount buttons.");
                 showWorldAmountSelector(player, selected, onBack);
                 return;
             }
@@ -1336,16 +1339,17 @@ public final class BedrockKicUI {
     }
 
     private static void submitWorldContribution(ServerPlayer player, int amount, Runnable onBack) {
-        if (amount <= 0 || SocialTokenService.count(player) < amount) {
-            tell(player, "Select a positive amount within your available physical Influence.");
+        if (amount <= 0 || CommunityProgressionService.availableInfluence(player) < amount) {
+            tell(player, "Select a positive amount within your available stored Influence.");
             showWorldProgression(player, onBack);
             return;
         }
         int previewPool = CommunityProgressionService.get(player.level().getServer()).pool();
+        String previewReview = CommunityProgressionService.contributionReview(player);
         ModalForm.Builder confirm = ModalForm.builder()
             .title("Submit Influence?")
-            .content("Submit " + amount + " Influence to World Progression?\n\n"
-                + "Light, Neutral, and Dark Influence all contribute to the same community pool.\n"
+            .content("Submit " + amount + " " + CommunityProgressionService.contributionCurrency(player) + " to World Progression?\n\n"
+                + "Reputation and Infamy contribute to the same community pool.\n"
                 + "Community pool: " + previewPool + " -> " + ((long) previewPool + amount) + "\n"
                 + "This action cannot be undone.")
             .button1("Cancel").button2("Submit");
@@ -1354,7 +1358,7 @@ public final class BedrockKicUI {
                 showWorldProgression(player, onBack);
                 return;
             }
-            if (CommunityProgressionService.get(player.level().getServer()).pool() != previewPool) {
+            if (!CommunityProgressionService.contributionReview(player).equals(previewReview)) {
                 tell(player, "World progress changed. Please select and review your contribution again.");
                 showWorldAmountSelector(player, 0, onBack);
                 return;
@@ -1365,7 +1369,7 @@ public final class BedrockKicUI {
                 return;
             }
             if (!CommunityProgressionService.contributeInfluence(player, amount)) {
-                tell(player, "You no longer have enough physical Influence.");
+                tell(player, "You no longer have enough stored Influence.");
             }
             showWorldProgression(player, onBack);
         }));
@@ -1507,7 +1511,7 @@ public final class BedrockKicUI {
                 () -> showCurses(player, site, () -> showDarkShrine(player, site, onBack))));
         }
         if (KarmaGameRules.enabled(player, KarmaGameRules.SHOP_ENABLED)) {
-            choices.add(choice("Villain Shop", "textures/blocks/chest_front.png", () -> showShop(player,
+            choices.add(choice("Dark Shop", "textures/blocks/chest_front.png", () -> showShop(player,
                 ShopCategory.VILLAIN, () -> showDarkShrine(player, site, onBack))));
         }
         if (KarmaGameRules.enabled(player, KarmaGameRules.SHRINE_COMPASS_ENABLED)) {
@@ -1567,10 +1571,10 @@ public final class BedrockKicUI {
         }
         List<Choice> choices = new ArrayList<>();
         if (site != null && ShopCategory.canAccess(player, ShopCategory.COMMON, site.type())) {
-            choices.add(choice("Common Shop", "textures/blocks/chest_front.png", () -> showShop(player, ShopCategory.COMMON, () -> showShopSections(player, site, onBack))));
+            choices.add(choice("Light Shop", "textures/blocks/chest_front.png", () -> showShop(player, ShopCategory.COMMON, () -> showShopSections(player, site, onBack))));
         }
         if (site != null && ShopCategory.canAccess(player, ShopCategory.VILLAIN, site.type())) {
-            choices.add(choice("Villain Shop", ICON_DARK, () -> showShop(player, ShopCategory.VILLAIN, () -> showShopSections(player, site, onBack))));
+            choices.add(choice("Dark Shop", ICON_DARK, () -> showShop(player, ShopCategory.VILLAIN, () -> showShopSections(player, site, onBack))));
         }
         choices.add(choice("Back", ICON_BACK, onBack == null ? () -> showMain(player, null, null) : onBack));
         simple(player, "Shrine Shop", KicCycle.statusLine(), choices);
@@ -1681,7 +1685,7 @@ public final class BedrockKicUI {
     private static void showLockedShopItem(ServerPlayer player, ShopCategory category, ShopReward reward,
             Runnable onBack, long cycle, String cycleStatus) {
         String lock = KarmaShopCatalog.purchaseBlocker(player, reward, cycle);
-        CustomForm.Builder form = CustomForm.builder().title(reward.displayName().toUpperCase(java.util.Locale.ROOT))
+        CustomForm.Builder form = CustomForm.builder().title(reward.displayName())
             .label("LOCKED\n" + lock)
             .label(KarmaShopCatalog.balanceLabel(player, reward))
             .dropdown("Navigation", "Back");
@@ -1711,7 +1715,7 @@ public final class BedrockKicUI {
         }
         String content = "Item: " + reward.displayName() + " x" + reward.count()
             + "\nCost: " + KarmaShopCatalog.priceLabel(player, reward) + "\n" + KarmaShopCatalog.balanceLabel(player, reward)
-            + "\n\nThe KIC shop service will recheck price, balance, purchase limits, and inventory space.";
+            + "\nConfirm to purchase this item.";
         ModalForm.Builder form = ModalForm.builder().title("Purchase Reward?")
             .content(content).button1("Cancel").button2("Purchase");
         form.validResultHandler(response -> guarded(player, () -> {
@@ -1729,7 +1733,7 @@ public final class BedrockKicUI {
                 tell(player, "That reward is no longer available in this shop.");
             } else {
                 KarmaShopCatalog.PurchaseResult result = KarmaShopCatalog.purchase(player, current, cycle);
-                tell(player, result.message());
+                if (!result.successful()) tell(player, result.message());
             }
             showShopSnapshot(player, category, onBack, cycle, cycleStatus);
         }));
@@ -1754,7 +1758,7 @@ public final class BedrockKicUI {
             choices.add(choice(type.displayName() + "\n" + compassTargetLabel(player, type),
                 shrineIcon(type), () -> retargetCompass(player, type, site)));
         }
-        choices.add(choice("Back", ICON_BACK, () -> player.closeContainer()));
+        choices.add(choice("Close", ICON_BACK, () -> player.closeContainer()));
         String owned = ShrineCompass.hasShrineCompass(player)
             ? "Choose where your Shrine Compass should point."
             : "Choose a destination to obtain a Shrine Compass for it.";

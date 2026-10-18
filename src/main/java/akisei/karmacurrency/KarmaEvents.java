@@ -52,7 +52,7 @@ public final class KarmaEvents {
 			QuestService.onPlayerJoin(player);
 			if (KarmaService.alignmentChoice(player) == 0) {
 				player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-					"Choose your starting alignment with /karma choose light or /karma choose dark."));
+					"Choose your starting alignment with /choose light or /choose dark."));
 			}
 		});
 		ServerPlayerEvents.LEAVE.register(HuntService::onPlayerLeave);

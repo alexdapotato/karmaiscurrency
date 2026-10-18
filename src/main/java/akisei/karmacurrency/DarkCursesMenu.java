@@ -68,7 +68,7 @@ public final class DarkCursesMenu extends KarmaMenu {
         if (!CurseBlessingService.canUseDarkShrine(player)) {
             display.setItem(HEADER, ShrineMenu.icon(Items.BARRIER, "Curses Unavailable",
                 "Devotion prevents access to Dark Shrines.",
-                "Purification is the future neutral escape route."));
+                "This commitment prevents access."));
             display.setItem(BACK, ShrineMenu.icon(Items.ARROW, "Back", "Return to the shrine menu."));
             return;
         }

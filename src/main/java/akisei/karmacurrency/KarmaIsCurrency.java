@@ -32,6 +32,7 @@ public class KarmaIsCurrency implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> { KarmaShopCatalog.reload(); KicCycle.bindServer(server); });
 		ServerLifecycleEvents.SERVER_STOPPING.register(KicCycle::unbindServer);
 		KarmaEvents.register();
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(KicMessages::flush);
 		KarmaCommands.register();
 		ShrineManager.register();
 		ShrineCommands.register();

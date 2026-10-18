@@ -50,10 +50,10 @@ public final class SocialTokenService {
 	public static ItemStack createToken(int count, Origin origin) {
 		int safeCount = Math.max(1, count);
 		ItemStack stack = new ItemStack(Items.ECHO_SHARD, safeCount);
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal(origin.itemName()));
+		stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(origin.itemName()));
 		stack.set(DataComponents.LORE, new ItemLore(List.of(
-			Component.literal(origin.displayName() + " social currency"),
-			Component.literal("Usable while " + origin.displayName().toLowerCase() + " aligned")
+			Component.literal("Physical Influence · " + origin.displayName() + " origin"),
+			Component.literal("Trade or redeem. Does not decay.")
 		)));
 		CompoundTag tag = new CompoundTag();
 		tag.putBoolean(MARKER, true);
@@ -114,7 +114,7 @@ public final class SocialTokenService {
 			remaining -= amount;
 			inserted += amount;
 		}
-		if (inserted > 0) player.sendSystemMessage(Component.literal(origin.itemName() + " +" + inserted));
+		
         return inserted;
 	}
 
@@ -140,7 +140,7 @@ public final class SocialTokenService {
 			}
 		}
 		int removed = Math.max(0, tokens) - remaining;
-        if (removed > 0) player.sendSystemMessage(Component.literal("Influence -" + removed));
+        
         return removed;
 	}
 

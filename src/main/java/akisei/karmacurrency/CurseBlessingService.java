@@ -150,7 +150,7 @@ public final class CurseBlessingService {
     }
 
     public static int sigilSlotLimit(ServerPlayer player) {
-        return stackSlotLimit(CommunityProgressionService.stage(player));
+        return stackSlotLimit(CommunityProgressionService.stage(player)) + (isDevilBound(player) ? 2 : 0);
     }
 
     static int stackSlotLimit(int worldStage) {
@@ -196,7 +196,8 @@ public final class CurseBlessingService {
             int encoded=KarmaPlayerState.getInt(p,SIGIL_SLOT_PREFIX+i);if(encoded==0)continue;
             String id=encoded>0?CurseBlessingRegistry.blessingId(encoded):CurseBlessingRegistry.curseId(-encoded);
             lines.add((encoded>0?"Blessing ":"Curse ")+id+" x"+KarmaPlayerState.getInt(p,SIGIL_STACK_PREFIX+i)
-                +(slotActive(p,i)?" [active]":" [inactive: alignment/commitment slot limit]"));
+                +(slotActive(p,i)?" [active]":" [inactive: alignment/commitment slot limit]")
+                +(encoded>0 ? " — " + (CurseBlessingRegistry.blessing(id).duration()==CurseBlessingRegistry.SigilDuration.PERMANENT ? "Permanent" : KicUiText.durationSeconds(blessingMinutesRemaining(p,id)*60L)+" remaining") : " — Permanent"));
         }
         if(virtualCommitment(p,true))lines.add("Blessing devotion x1 [permanent, active]");
         if(virtualCommitment(p,false))lines.add("Curse devil x1 [permanent, active]");
@@ -241,7 +242,7 @@ public final class CurseBlessingService {
         // Commitment removes the opposite type before adding its own one-stack Sigil.
         int usedStacks = becomingCommitted ? stackCount(player, !blessing) : stackCount(player, null);
         return capacityBlocker(slotCount(player, !blessing), alignedLimit(player, blessing, target),
-            usedStacks, sigilSlotLimit(player), currentStacks == 0);
+            usedStacks, stackSlotLimit(CommunityProgressionService.stage(player)) + (target == Commitment.DEVIL ? 2 : 0), currentStacks == 0);
     }
 
     public static boolean canReleaseSigil(ServerPlayer player, boolean blessing, String id) {
@@ -264,13 +265,13 @@ public final class CurseBlessingService {
         if (current == 0) { if (blessing) blessings++; else curses++; }
         int stacks = (committed ? stackCount(player, !blessing) : activeSigilSlotCount(player)) + 1;
         return "After activation: " + (current + 1) + " stack(s); Curses " + curses + "/" + alignedLimit(player, false, target)
-            + "; Blessings " + blessings + "/" + alignedLimit(player, true, target) + "; Stack slots " + stacks + "/" + sigilSlotLimit(player);
+            + "; Blessings " + blessings + "/" + alignedLimit(player, true, target) + "; Stack slots " + stacks + "/" + (stackSlotLimit(CommunityProgressionService.stage(player)) + (target == Commitment.DEVIL ? 2 : 0));
     }
 
     public static String slotSummary(ServerPlayer player) {
-        return "Curses: " + activeCurseSlotCount(player) + "/" + curseSlotLimit(player)
-            + " | Blessings: " + activeBlessingSlotCount(player) + "/" + blessingSlotLimit(player)
-            + " | Equipped stack slots: " + activeSigilSlotCount(player) + "/" + sigilSlotLimit(player);
+        return "Curse types: " + activeCurseSlotCount(player) + "/" + curseSlotLimit(player)
+            + "\nBlessing types: " + activeBlessingSlotCount(player) + "/" + blessingSlotLimit(player)
+            + "\nShared stacks: " + activeSigilSlotCount(player) + "/" + sigilSlotLimit(player);
     }
 
     private static int encodedCurse(int storageId) { return -storageId; }
@@ -338,7 +339,7 @@ public final class CurseBlessingService {
         if (encodedId < 0) {
             CurseBlessingRegistry.CurseDefinition definition = CurseBlessingRegistry.curse(-encodedId);
             if (definition == null) return 1;
-            return definition.maxStacks() + (isDevilBound(player) ? 2 : 0);
+            return definition.maxStacks();
         }
         CurseBlessingRegistry.BlessingDefinition definition = CurseBlessingRegistry.blessing(encodedId);
         return definition == null ? 1 : definition.maxStacks();
@@ -521,6 +522,8 @@ public final class CurseBlessingService {
         migrateLegacySigils(player);
         CurseBlessingRegistry.CurseDefinition definition = CurseBlessingRegistry.curse(id);
         if (definition == null) return false;
+        String eligibility = commitmentRequirement(player, id);
+        if (eligibility != null) { player.sendSystemMessage(Component.literal(eligibility)); return false; }
         if (!KarmaGameRules.enabled(player, KarmaGameRules.SIGILS_ENABLED)
             || !KarmaGameRules.enabled(player, KarmaGameRules.CURSES_ENABLED)) {
             player.sendSystemMessage(Component.literal("Curses are disabled for this world."));
@@ -557,12 +560,12 @@ public final class CurseBlessingService {
             player.sendSystemMessage(Component.literal("Sigil storage is full."));
             return false;
         }
-        if (!hasCosts(player, definition.cost())) {
+        if (!hasCosts(player, activationCosts(player, false, id))) {
             player.sendSystemMessage(Component.literal("You do not have the required items: "
-                + CurseBlessingRegistry.costDescription(definition.cost())));
+                + CurseBlessingRegistry.costDescription(activationCosts(player, false, id))));
             return false;
         }
-        consumeCosts(player, definition.cost());
+        consumeCosts(player, activationCosts(player, false, id));
         if (devilCommitment && !commit(player, Commitment.DEVIL)) return false;
 
         if (existing > 0 && !devilCommitment) {
@@ -601,6 +604,8 @@ public final class CurseBlessingService {
         if (!KarmaGameRules.enabled(player, KarmaGameRules.SIGILS_ENABLED)) return "Sigils are disabled for this world.";
         if ((blessing && "devotion".equals(id) || !blessing && "devil".equals(id))
                 && commitment(player) != Commitment.NONE) return "You already have a permanent commitment.";
+        String requirement = commitmentRequirement(player, id);
+        if (requirement != null) return requirement;
         int stacks = storedStack(player, blessing, id);
         if (blessing) {
             if (!KarmaGameRules.enabled(player, KarmaGameRules.BLESSINGS_ENABLED)) return "Blessings are disabled for this world.";
@@ -618,16 +623,35 @@ public final class CurseBlessingService {
         }
         String capacityIssue = capacityBlocker(player, blessing, id);
         if (capacityIssue != null) return capacityIssue;
-        List<CurseBlessingRegistry.ItemCost> costs = blessing
-            ? CurseBlessingRegistry.blessing(id).cost() : CurseBlessingRegistry.curse(id).cost();
+        List<CurseBlessingRegistry.ItemCost> costs = activationCosts(player, blessing, id);
         if (!CurseBlessingService.hasRequiredItems(player, costs)) {
             return String.join("; ", KicUiText.costLines(player, blessing, id).stream().filter(line -> line.startsWith("Missing:")).toList());
         }
         return null;
     }
 
+    public static String commitmentRequirement(ServerPlayer player, String id) {
+        if ("devotion".equals(id) && KarmaService.get(player) < KarmaService.karma(300)) return "Requires 300 Karma (not consumed).";
+        if ("devil".equals(id) && KarmaService.get(player) > KarmaService.karma(-300)) return "Requires -300 Karma or lower (not consumed).";
+        return null;
+    }
+
+    public static List<CurseBlessingRegistry.ItemCost> activationCosts(ServerPlayer player, boolean blessing, String id) {
+        var base = blessing ? CurseBlessingRegistry.blessing(id).cost() : CurseBlessingRegistry.curse(id).cost();
+        if (!blessing) return base;
+        int stacks = storedStack(player, true, id);
+        if (id.equals("protection")) return List.of(CurseBlessingRegistry.ItemCost.reputation(KicBalanceRules.protectionCost(stacks)));
+        if (id.equals("haste")) return List.of(CurseBlessingRegistry.ItemCost.reputation(KicBalanceRules.hasteCost(stacks)));
+        if (id.equals("hunter") && stacks > 0) {
+            var costs = new java.util.ArrayList<>(base);
+            costs.add(new CurseBlessingRegistry.ItemCost(net.minecraft.world.item.Items.NETHERITE_INGOT, 1));
+            return List.copyOf(costs);
+        }
+        return base;
+    }
+
     public static int availableCost(ServerPlayer player, CurseBlessingRegistry.ItemCost cost) {
-        if (cost.influence()) return SocialTokenService.count(player);
+        if (cost.influence()) return cost.reputation() ? SocialCurrencyService.getReputation(player) : KarmaService.getInfamyPoints(player);
         int available = 0;
         for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
             ItemStack stack = player.getInventory().getItem(slot);
@@ -647,8 +671,8 @@ public final class CurseBlessingService {
     private static void consumeCosts(ServerPlayer player, List<CurseBlessingRegistry.ItemCost> costs) {
         for (CurseBlessingRegistry.ItemCost cost : costs) {
             if (cost.influence()) {
-                SocialTokenService.remove(player, cost.count());
-                KicHistoryService.recordInfluence(player, -cost.count(), "Curse purchase");
+                if (cost.reputation()) SocialCurrencyService.addReputation(player, -cost.count(), "Sigil purchase");
+                else KarmaService.addInfamyPoints(player, -cost.count(), "Sigil purchase");
                 continue;
             }
             int remaining = cost.count();
@@ -747,7 +771,7 @@ public final class CurseBlessingService {
 
         setModifier(player, Attributes.MAX_HEALTH, PARASITE_MAX_HEALTH, -2.0, parasite);
 
-        setModifier(player, Attributes.MOVEMENT_SPEED, HOLLOW_MOVEMENT_SPEED, 0.075, hollow);
+        setModifier(player, Attributes.MOVEMENT_SPEED, HOLLOW_MOVEMENT_SPEED, 0.095, hollow, AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
         setModifier(player, Attributes.BLOCK_INTERACTION_RANGE, HOLLOW_BLOCK_INTERACTION_RANGE, 1.0, hollow);
         setModifier(player, Attributes.ENTITY_INTERACTION_RANGE, HOLLOW_ENTITY_INTERACTION_RANGE, 1.0, hollow);
         setModifier(player, Attributes.MAX_HEALTH, HOLLOW_MAX_HEALTH, -4.0, hollow);
@@ -756,9 +780,9 @@ public final class CurseBlessingService {
         setModifier(player, Attributes.BLOCK_BREAK_SPEED, MISER_BLOCK_BREAK_SPEED, 0.50, miser);
         setModifier(player, Attributes.ATTACK_DAMAGE, INSOMNIA_ATTACK_DAMAGE, -2.0, insomnia);
         setModifier(player, Attributes.ARMOR, DUELIST_ARMOR, -3.0, duelist);
-        setModifier(player, Attributes.ARMOR, FETTERED_ARMOR, 5.0, fettered);
+        setModifier(player, Attributes.ARMOR, FETTERED_ARMOR, KicBalanceRules.fetteredArmor(curseStack(player, "fettered")), fettered);
         setModifier(player, Attributes.KNOCKBACK_RESISTANCE, FETTERED_KNOCKBACK, 0.30, fettered);
-        setModifier(player, Attributes.MOVEMENT_SPEED, FETTERED_MOVEMENT_SPEED, -0.20, fettered);
+        setModifier(player, Attributes.MOVEMENT_SPEED, FETTERED_MOVEMENT_SPEED, KicBalanceRules.fetteredMovement(curseStack(player, "fettered")), fettered, AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
         setModifier(player, Attributes.JUMP_STRENGTH, FETTERED_JUMP_STRENGTH, -0.20, fettered);
 
         boolean devotion = isDevoted(player);
@@ -766,8 +790,8 @@ public final class CurseBlessingService {
         setModifier(player, Attributes.MOVEMENT_SPEED, DEVOTION_MOVEMENT_SPEED, 0.10, devotion, AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
         setModifier(player, Attributes.ATTACK_DAMAGE, DEVOTION_ATTACK_DAMAGE, 0.10, devotion, AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
         setModifier(player, Attributes.MAX_HEALTH, DEVOTION_MAX_HEALTH, 2.0, devotion);
-        setModifier(player, Attributes.ARMOR, DEVOTION_ARMOR, 3.0, devotion);
-        setModifier(player, Attributes.MAX_HEALTH, DEVIL_MAX_HEALTH, 8.0, devil);
+        setModifier(player, Attributes.ARMOR, DEVOTION_ARMOR, 0.0, false);
+        setModifier(player, Attributes.MAX_HEALTH, DEVIL_MAX_HEALTH, 0.0, false);
 
         // Lowering max health must never leave the player above the new maximum.
         if (player.getHealth() > player.getMaxHealth()) {
@@ -780,6 +804,7 @@ public final class CurseBlessingService {
         boolean watcher = hasBlessing(player, "watcher");
         boolean swiftness = hasBlessing(player, "swiftness");
         boolean protection = hasBlessing(player, "protection");
+        setModifier(player, Attributes.ARMOR, KarmaIsCurrency.id("blessing_protection_armor"), 2.0 * blessingStack(player, "protection"), protection);
         boolean depth = hasBlessing(player, "depth");
         boolean haste = hasBlessing(player, "haste");
 
@@ -792,7 +817,7 @@ public final class CurseBlessingService {
 
         int protectionMinutes = blessingMinutesRemaining(player, "protection");
         if (protection && protectionMinutes > 0) {
-            player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, protectionMinutes * 1200, 0, false, false, true));
+            // Protection now grants armor, not Resistance.
         }
 
         int depthMinutes = blessingMinutesRemaining(player, "depth");
@@ -802,7 +827,7 @@ public final class CurseBlessingService {
         }
         int hasteMinutes = blessingMinutesRemaining(player, "haste");
         if (haste && hasteMinutes > 0) {
-            player.addEffect(new MobEffectInstance(MobEffects.HASTE, hasteMinutes * 1200, 0, false, false, true));
+            player.addEffect(new MobEffectInstance(MobEffects.HASTE, hasteMinutes * 1200, blessingStack(player, "haste") >= 3 ? 1 : 0, false, false, true));
         }
     }
 
@@ -861,6 +886,8 @@ public final class CurseBlessingService {
         migrateLegacySigils(player);
         CurseBlessingRegistry.BlessingDefinition definition = CurseBlessingRegistry.blessing(id);
         if (definition == null) return false;
+        String eligibility = commitmentRequirement(player, id);
+        if (eligibility != null) { player.sendSystemMessage(Component.literal(eligibility)); return false; }
         if (!KarmaGameRules.enabled(player, KarmaGameRules.SIGILS_ENABLED)
             || !KarmaGameRules.enabled(player, KarmaGameRules.BLESSINGS_ENABLED)) {
             player.sendSystemMessage(Component.literal("Blessings are disabled for this world."));
@@ -898,12 +925,12 @@ public final class CurseBlessingService {
             player.sendSystemMessage(Component.literal("Sigil storage is full."));
             return false;
         }
-        if (!hasCosts(player, definition.cost())) {
+        if (!hasCosts(player, activationCosts(player, true, id))) {
             player.sendSystemMessage(Component.literal("You do not have the required items: "
-                + CurseBlessingRegistry.costDescription(definition.cost())));
+                + CurseBlessingRegistry.costDescription(activationCosts(player, true, id))));
             return false;
         }
-        consumeCosts(player, definition.cost());
+        consumeCosts(player, activationCosts(player, true, id));
         if (devotion) {
             if (!commit(player, Commitment.DEVOTION)) return false;
             syncBlessingEffects(player);

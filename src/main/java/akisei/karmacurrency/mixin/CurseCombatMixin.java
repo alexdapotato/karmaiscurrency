@@ -41,9 +41,8 @@ public abstract class CurseCombatMixin {
             amount *= 1.20F;
         }
 
-        if (attacker != null && CurseBlessingService.hasBlessing(attacker, "hunter") && !(victim instanceof ServerPlayer)) {
-            amount *= 1.20F;
-            if (victim instanceof Enemy && source.getDirectEntity() instanceof AbstractArrow) amount *= 1.10F;
+        if (attacker != null && CurseBlessingService.hasBlessing(attacker, "hunter") && victim instanceof Enemy) {
+            amount *= 1.0F + 0.05F * CurseBlessingService.blessingStack(attacker, "hunter");
         }
 
         if (attacker != null && CurseBlessingService.hasCurse(attacker, "duelist")) {
@@ -52,7 +51,7 @@ public abstract class CurseCombatMixin {
 
         if (attacker != null && CurseBlessingService.hasCurse(attacker, "executioner")) {
             float healthPercent = victim.getMaxHealth() <= 0.0F ? 1.0F : victim.getHealth() / victim.getMaxHealth();
-            if (healthPercent < 0.50F) amount *= 1.30F;
+            if (healthPercent < 0.40F) amount *= 1.25F;
             else if (healthPercent > 0.50F) amount *= 0.80F;
         }
 

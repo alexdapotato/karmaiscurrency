@@ -39,6 +39,7 @@ public final class ShrineMenu extends KarmaMenu {
 	}
 
 	public static void open(ServerPlayer player, ShrineSite site) {
+        if (!ShrineInteractions.withinMenuRange(player, site)) return;
 		if (BedrockKicUI.openShrine(player, site)) return;
 		if (site.type() == ShrineType.MONUMENT) {
 			MonumentMenu.open(player, site);
@@ -51,7 +52,7 @@ public final class ShrineMenu extends KarmaMenu {
 
 	@Override
 	public void clicked(int slotId, int button, ContainerInput input, Player clicker) {
-		if (clicker != player) return;
+		if (clicker != player || !stillValid(clicker)) return;
 		if (slotId >= 0 && slotId < SIZE) {
 			if (input == ContainerInput.PICKUP && button == 0) {
 				handleClick(slotId);
@@ -61,6 +62,11 @@ public final class ShrineMenu extends KarmaMenu {
 		}
 		super.clicked(slotId, button, input, clicker);
 	}
+
+    @Override
+    public boolean stillValid(Player other) {
+        return other == player && ShrineInteractions.withinMenuRange(player, site);
+    }
 
 	@Override
 	public void removed(Player closingPlayer) {
@@ -149,7 +155,7 @@ public final class ShrineMenu extends KarmaMenu {
 				KarmaGameRules.enabled(player, KarmaGameRules.COMPASS_COOLDOWN_ENABLED) ? "Cooldown: 10 minutes." : "Cooldown disabled."));
 		}
 		display.setItem(INFO, icon(Items.LODESTONE, "Shrine Info",
-			"View shrine information.", "Interaction is reserved for a later pass."));
+			"View shrine information.", "Explore this shrine and its services."));
 		if (KarmaGameRules.enabled(player, KarmaGameRules.SHOP_ENABLED)) {
 			display.setItem(SHOP, icon(Items.BELL, "Shop", "Open the shrine shop."));
 		}
@@ -173,16 +179,16 @@ public final class ShrineMenu extends KarmaMenu {
 
 	static ItemStack icon(Item item, String name, String... lore) {
 		ItemStack stack = new ItemStack(item);
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+		stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(name));
 		if (lore.length > 0) {
 			stack.set(DataComponents.LORE, new ItemLore(
-					java.util.Arrays.stream(lore).<Component>map(Component::literal).toList()));
+					KicUiText.lore(lore)));
 		}
 		return stack;
 	}
 
 	static ItemStack icon(ItemStack stack, String name, String... lore) {
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+		stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(name));
 		if (lore.length > 0) {
 			stack.set(DataComponents.LORE, new ItemLore(
 					java.util.Arrays.stream(lore)

@@ -31,6 +31,7 @@ public final class WorldProgressionMenu extends KarmaMenu {
 	private final Runnable onBack;
 	private int pendingContribution;
 	private int previewPool;
+    private String previewReview;
 
 	private WorldProgressionMenu(int id, Inventory inventory, ServerPlayer player, Runnable onBack, SimpleContainer display) {
 		super(MenuType.GENERIC_9x6, id, inventory, display, ROWS, player);
@@ -54,7 +55,7 @@ public final class WorldProgressionMenu extends KarmaMenu {
 					return;
 				}
 				else if (slotId == CONFIRM_CONTRIBUTION && pendingContribution > 0) {
-					if (CommunityProgressionService.get(player.level().getServer()).pool() != previewPool) {
+					if (!CommunityProgressionService.contributionReview(player).equals(previewReview)) {
                         player.sendSystemMessage(Component.literal("World progress changed. Please select and review your contribution again."));
                         pendingContribution = 0;
                     } else {
@@ -62,17 +63,17 @@ public final class WorldProgressionMenu extends KarmaMenu {
                         pendingContribution = 0;
                     }
 				} else if (slotId == MAXIMUM) {
-                    pendingContribution = SocialTokenService.count(player);
+                    pendingContribution = CommunityProgressionService.availableInfluence(player);
                 } else if (slotId == FILL_STAGE) {
                     CommunityProgressionService data = CommunityProgressionService.get(player.level().getServer());
-                    pendingContribution = WorldContributionAmounts.fill(SocialTokenService.count(player), data.pool(),
-                        CommunityProgressionService.nextStageThreshold(data.stage()), data.stage() >= CommunityProgressionService.MAX_STAGE);
+                    pendingContribution = WorldContributionAmounts.fill(CommunityProgressionService.availableInfluence(player), data.pool(),
+                        CommunityProgressionService.get(player.level().getServer()).nextStageThreshold(data.stage()), data.stage() >= CommunityProgressionService.MAX_STAGE);
                 } else if (slotId == CANCEL_CONTRIBUTION) {
 					pendingContribution = 0;
 				} else {
 					for (int i = 0; i < CONTRIBUTION_SLOTS.length; i++) {
 						if (slotId == CONTRIBUTION_SLOTS[i]) {
-							pendingContribution = WorldContributionAmounts.adjust(pendingContribution, CONTRIBUTION_AMOUNTS[i], SocialTokenService.count(player));
+							pendingContribution = WorldContributionAmounts.adjust(pendingContribution, CONTRIBUTION_AMOUNTS[i], CommunityProgressionService.availableInfluence(player));
 							break;
 						}
 					}
@@ -94,7 +95,7 @@ public final class WorldProgressionMenu extends KarmaMenu {
             return;
         }
 		boolean contributed = CommunityProgressionService.contributeInfluence(player, amount);
-		if (!contributed) player.sendSystemMessage(Component.literal("You need " + amount + " physical Influence in your inventory."));
+		if (!contributed) player.sendSystemMessage(Component.literal("You need " + amount + " stored Influence in your inventory."));
 	}
 
 	private void refresh() {
@@ -103,8 +104,9 @@ public final class WorldProgressionMenu extends KarmaMenu {
 		int stage = community.stage();
 		int pool = community.pool();
         previewPool = pool;
-		int previous = CommunityProgressionService.thresholdForStage(stage);
-		int next = CommunityProgressionService.nextStageThreshold(stage);
+        previewReview = CommunityProgressionService.contributionReview(player);
+		int previous = CommunityProgressionService.get(player.level().getServer()).thresholdForStage(stage);
+		int next = CommunityProgressionService.get(player.level().getServer()).nextStageThreshold(stage);
 		int progress = next > previous ? Math.clamp(pool - previous, 0, next - previous) : next - previous;
 		int filled = next > previous ? progress * 5 / (next - previous) : 5;
 
@@ -121,21 +123,21 @@ public final class WorldProgressionMenu extends KarmaMenu {
 				: "Stage 5 is the cap."));
 		for (int i = 0; i < 5; i++) {
 			display.setItem(BAR_START + i, icon(i < stage ? Items.EMERALD_BLOCK : Items.STAINED_GLASS_PANE.gray(),
-				"Stage " + (i + 1), i < stage ? "Unlocked" : "Requires " + CommunityProgressionService.thresholdForStage(i + 1) + " total Influence"));
+				"Stage " + (i + 1), i < stage ? "Unlocked" : "Requires " + CommunityProgressionService.get(player.level().getServer()).thresholdForStage(i + 1) + " total Influence"));
 		}
-		int availableInfluence = SocialTokenService.count(player);
+		int availableInfluence = CommunityProgressionService.availableInfluence(player);
 		for (int i = 0; i < CONTRIBUTION_AMOUNTS.length; i++) {
 			int amount = CONTRIBUTION_AMOUNTS[i];
 			display.setItem(CONTRIBUTION_SLOTS[i], icon(Math.abs(amount) == 100 ? Items.GOLD_BLOCK : Math.abs(amount) == 10 ? Items.GOLD_INGOT : Items.GOLD_NUGGET,
 				(amount > 0 ? "+" : "") + amount + " Influence",
-				"Consumes physical Influence of any origin.",
+				"Spends " + CommunityProgressionService.contributionCurrency(player) + ".",
 				"Available now: " + CommunityProgressionService.formatInfluence(availableInfluence)));
 		}
         display.setItem(31, icon(Items.ECHO_SHARD, "Selected: " + pendingContribution,
-            "Available physical Influence: " + availableInfluence,
+            "Available " + CommunityProgressionService.contributionCurrency(player) + ": " + availableInfluence,
             "Community pool: " + pool + " -> " + ((long) pool + pendingContribution)));
         display.setItem(FILL_STAGE, icon(Items.BEACON, "Fill next stage", "Select what you can afford toward the next stage."));
-        display.setItem(MAXIMUM, icon(Items.EMERALD_BLOCK, "Submit maximum", "Select all physical Influence; confirm below."));
+        display.setItem(MAXIMUM, icon(Items.EMERALD_BLOCK, "Select maximum", "Select all stored Influence; confirm below."));
 		display.setItem(CONFIRM_CONTRIBUTION,
 			pendingContribution > 0
 				? icon(Items.CONCRETE.lime(), "Confirm " + pendingContribution + " Influence",
@@ -151,9 +153,9 @@ public final class WorldProgressionMenu extends KarmaMenu {
 
 	private static ItemStack icon(net.minecraft.world.item.Item item, String name, String... lore) {
 		ItemStack stack = new ItemStack(item);
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+		stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(name));
 		if (lore.length > 0) stack.set(DataComponents.LORE,
-			new ItemLore(java.util.Arrays.stream(lore).<Component>map(Component::literal).toList()));
+			new ItemLore(KicUiText.lore(lore)));
 		return stack;
 	}
 }

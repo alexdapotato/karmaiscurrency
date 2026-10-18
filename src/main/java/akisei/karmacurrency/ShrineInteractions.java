@@ -75,6 +75,7 @@ public final class ShrineInteractions {
 
 	/** Shared shrine activation path used by both right-click and core-contact activation. */
 	static boolean openShrine(ServerPlayer serverPlayer, ShrineSite shrine) {
+        if (!withinMenuRange(serverPlayer, shrine)) return false;
 		if (!KarmaGameRules.enabled(serverPlayer, KarmaGameRules.SHRINES_ENABLED)) {
 			serverPlayer.sendSystemMessage(net.minecraft.network.chat.Component.literal("Shrines are disabled for this world."));
 			return true;
@@ -108,21 +109,29 @@ public final class ShrineInteractions {
 			.filter(site -> {
 				int radius = menuAccessRadius(site);
 				double radiusSquared = (double) radius * radius;
-				return site.horizontalDistanceSquaredToLodestone(clicked) <= radiusSquared
-					&& horizontalDistanceSquaredToLodestone(player.getX(), player.getZ(), site) <= radiusSquared;
+				return distanceSquaredToLodestone(clicked.getX() + 0.5D, clicked.getY() + 0.5D, clicked.getZ() + 0.5D, site) <= radiusSquared
+                    && withinMenuRange(player, site);
 			})
-			.min(Comparator.comparingDouble(site -> site.horizontalDistanceSquaredToLodestone(clicked)));
+			.min(Comparator.comparingDouble(site -> distanceSquaredToLodestone(clicked.getX() + 0.5D, clicked.getY() + 0.5D, clicked.getZ() + 0.5D, site)));
 	}
+
+    static boolean withinMenuRange(ServerPlayer player, ShrineSite site) {
+        if (site == null || !player.isAlive() || player.isSpectator()
+                || player.level().dimension() != Level.OVERWORLD) return false;
+        int radius = menuAccessRadius(site);
+        return distanceSquaredToLodestone(player.getX(), player.getY(), player.getZ(), site) <= (double) radius * radius;
+    }
 
 	private static int menuAccessRadius(ShrineSite site) {
 		return site.type() == ShrineType.MONUMENT ? 7 : 4;
 	}
 
-	private static double horizontalDistanceSquaredToLodestone(double x, double z, ShrineSite site) {
+	static double distanceSquaredToLodestone(double x, double y, double z, ShrineSite site) {
 		BlockPos lodestone = site.actualLodestonePosition();
 		double dx = x - (lodestone.getX() + 0.5D);
-		double dz = z - (lodestone.getZ() + 0.5D);
-		return dx * dx + dz * dz;
+		double dy = y - (lodestone.getY() + 0.5D);
+        double dz = z - (lodestone.getZ() + 0.5D);
+		return dx * dx + dy * dy + dz * dz;
 	}
 
 }

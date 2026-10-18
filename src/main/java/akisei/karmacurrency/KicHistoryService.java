@@ -54,19 +54,19 @@ public final class KicHistoryService extends SavedData {
     }
 
     public static void recordKarma(ServerPlayer player, int delta, String reason) {
-        // History/logging is temporarily disabled.
+        if (delta != 0) record(player, "Karma " + (delta > 0 ? "+" : "") + KarmaService.format(delta), reason);
     }
 
     public static void recordSocial(ServerPlayer player, String currency, int delta, String reason) {
-        // History/logging is temporarily disabled.
+        if (delta != 0) record(player, currency + " " + signed(delta), reason);
     }
 
     public static void recordInfluence(ServerPlayer player, int delta, String reason) {
-        // History/logging is temporarily disabled.
+        if (delta != 0) record(player, "Physical Influence " + signed(delta), reason);
     }
 
     public static void recordEvent(ServerPlayer player, String reason) {
-        // General transaction history remains disabled.
+        record(player, "Event", reason);
     }
 
     public static void recordRecognition(ServerPlayer player, String reason) {
@@ -74,7 +74,8 @@ public final class KicHistoryService extends SavedData {
     }
 
     public static void recordContribution(ServerPlayer player, int amount) {
-        // History/logging is temporarily disabled.
+        record(player, "Contribution +" + amount, "World Progression");
+        recordWorld(player.level().getServer(), player.getName().getString(), "Contribution +" + amount);
     }
 
     public static List<String> personal(ServerPlayer player) {
@@ -85,6 +86,14 @@ public final class KicHistoryService extends SavedData {
     public static List<String> contributions(MinecraftServer server) {
         KicHistoryService data = get(server);
         return List.copyOf(data.entries.getOrDefault(WORLD_KEY, List.of()));
+    }
+
+    public static void recordWorld(MinecraftServer server, String actor, String reason) {
+        KicHistoryService data = get(server);
+        String line = timestamp() + " | " + actor + " | " + reason;
+        append(data.entries, WORLD_KEY, line, MAX_WORLD_ENTRIES);
+        data.setDirty();
+        appendAdmin(line);
     }
 
     private static void record(ServerPlayer player, String change, String reason) {

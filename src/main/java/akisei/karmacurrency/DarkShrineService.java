@@ -53,7 +53,7 @@ public final class DarkShrineService {
 		}
 		int cost = CommunityProgressionService.scaleShrineCost(player, config.darkContractCost);
 		if (KarmaService.getInfamyPoints(player) < cost) {
-			player.sendSystemMessage(Component.literal("You need " + cost + " Infamy Points to accept a Dark contract at your current community stage."));
+			player.sendSystemMessage(Component.literal("You need " + cost + " Infamy to accept a Dark contract at your current community stage."));
 			return false;
 		}
 		int cooldown = Math.max(0, KarmaPlayerState.getInt(player, "dark_contract_cd") - currentMinute(player));
@@ -79,7 +79,7 @@ public final class DarkShrineService {
 			KarmaPlayerState.clear(player, "dark_contract_count");
 			KarmaPlayerState.setInt(player, "dark_contract_cd", currentMinute(player) + config.darkContractCooldownMinutes);
 			KarmaService.addInfamyPoints(player, config.darkContractReward, "completing a Dark contract");
-			player.sendSystemMessage(Component.literal("Dark contract complete. +" + config.darkContractReward + " Infamy Points."));
+			player.sendSystemMessage(Component.literal("Dark contract complete. +" + config.darkContractReward + " Infamy."));
 			player.playSound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0F, 0.8F);
 		} else {
 			KarmaPlayerState.setInt(player, "dark_contract_count", count);
@@ -95,7 +95,7 @@ public final class DarkShrineService {
 		int baseRequired = curse == 1 ? config.darkCurseRuinCost : curse == 2 ? config.darkCurseSightCost : Integer.MAX_VALUE;
 		int required = CommunityProgressionService.scaleShrineCost(player, baseRequired);
 		if (KarmaService.getInfamyPoints(player) < required) {
-			player.sendSystemMessage(Component.literal("You need " + required + " Infamy Points."));
+			player.sendSystemMessage(Component.literal("You need " + required + " Infamy."));
 			return false;
 		}
 		int cooldown = Math.max(0, KarmaPlayerState.getInt(player, "dark_curse_cd") - currentMinute(player));

@@ -112,7 +112,9 @@ public final class KarmaShopMenu extends KarmaMenu {
 		return slots.indexOf(slot) >= DISPLAY_SLOTS;
 	}
 
-	private void handleDisplayClick(int slotId) {
+	private final ShopConfirmation confirmation = new ShopConfirmation();
+
+    private void handleDisplayClick(int slotId) {
 		if (slotId == COMMON_TAB_SLOT) {
 			if (allowBothTabs || (shrine != null && ShopCategory.canAccess(player, ShopCategory.COMMON, shrine.type()))) {
 				showCategory(ShopCategory.COMMON);
@@ -139,9 +141,16 @@ public final class KarmaShopMenu extends KarmaMenu {
 					showCategory(category);
 					return;
 				}
-				KarmaShopCatalog.PurchaseResult result = KarmaShopCatalog.purchase(player, reward, catalogCycle);
+				String confirmationKey = reward.id() + ":" + KarmaShopCatalog.scaledCost(player, reward) + ":" + category;
+                if (!confirmation.mayPurchase(confirmationKey)) {
+                    showCategory(category);
+                    player.sendSystemMessage(Component.literal("Click again to purchase."));
+                    return;
+                }
+                KarmaShopCatalog.PurchaseResult result = KarmaShopCatalog.purchase(player, reward, catalogCycle);
 				if (result.successful()) {
-					player.sendOverlayMessage(result.asComponent());
+                    confirmation.purchased();
+					// The service emits one combined purchase receipt.
 				} else {
 					player.sendSystemMessage(result.asComponent());
 				}
@@ -152,7 +161,8 @@ public final class KarmaShopMenu extends KarmaMenu {
 	}
 
 	private void showCategory(ShopCategory category) {
-		this.category = category;
+		if (this.category != category) confirmation.changedCategory();
+        this.category = category;
 		fillBackground();
 		if (allowBothTabs || (shrine != null && ShopCategory.canAccess(player, ShopCategory.COMMON, shrine.type()))) {
 			display.setItem(COMMON_TAB_SLOT, icon(Items.EMERALD,
@@ -178,7 +188,7 @@ public final class KarmaShopMenu extends KarmaMenu {
 			display.setItem(REWARD_SLOTS[index], icon(KarmaShopCatalog.previewStack(player, reward, catalogCycle),
 				reward.displayName(),
                 KarmaShopCatalog.priceLabel(player, reward), KarmaShopCatalog.balanceLabel(player, reward),
-                "Receive: " + reward.count(), lock.isEmpty() ? "Left-click to purchase." : lock,
+                "Receive: " + reward.count(), lock.isEmpty() ? confirmation.prompt(reward.id() + ":" + KarmaShopCatalog.scaledCost(player, reward) + ":" + category) : lock,
                 reward.maxPurchases() == 0 ? "Unlimited purchases." : "Purchases this cycle: "
                     + ShopPurchaseState.get(player.level().getServer()).count(player.getUUID(), category, reward.id(), catalogCycle)
                     + "/" + reward.maxPurchases()));
@@ -194,7 +204,7 @@ public final class KarmaShopMenu extends KarmaMenu {
 		return "Karma: " + KarmaService.format(KarmaService.get(player))
 			+ " | Reputation: " + SocialCurrencyService.getReputation(player)
 			+ " | Infamy: " + KarmaService.getInfamyPoints(player)
-			+ " | Tokens: " + SocialTokenService.count(player);
+			+ " | Physical Influence: " + SocialTokenService.count(player);
 	}
 
 	private static String categoryDescription(ShopCategory category) {
@@ -206,18 +216,18 @@ public final class KarmaShopMenu extends KarmaMenu {
 
 	private static ItemStack icon(Item item, String name, String... lore) {
 		ItemStack stack = new ItemStack(item);
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+		stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(name));
 		if (lore.length > 0) {
-			stack.set(DataComponents.LORE, new ItemLore(java.util.Arrays.stream(lore).<Component>map(line -> Component.literal(line).withStyle(line.startsWith("Missing:") ? net.minecraft.ChatFormatting.RED : net.minecraft.ChatFormatting.GRAY)).toList()));
+			stack.set(DataComponents.LORE, new ItemLore(KicUiText.lore(lore)));
 		}
 		return stack;
 	}
 
 	private static ItemStack icon(ItemStack stack, String name, String... lore) {
 		if (stack == null || stack.isEmpty()) stack = new ItemStack(Items.BARRIER);
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+		stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(name));
 		if (lore.length > 0) {
-			stack.set(DataComponents.LORE, new ItemLore(java.util.Arrays.stream(lore).<Component>map(line -> Component.literal(line).withStyle(line.startsWith("Missing:") ? net.minecraft.ChatFormatting.RED : net.minecraft.ChatFormatting.GRAY)).toList()));
+			stack.set(DataComponents.LORE, new ItemLore(KicUiText.lore(lore)));
 		}
 		return stack;
 	}

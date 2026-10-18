@@ -94,6 +94,9 @@ public final class KarmaShopCatalog {
 
 	/** A captured screen may finish a transaction against its original cycle catalog. */
 	public static PurchaseResult purchase(ServerPlayer player, ShopReward submitted, long catalogCycle) {
+        return KicMessages.transaction(player, submitted == null ? "Purchase" : "Purchased " + submitted.count() + " " + submitted.displayName(), () -> purchaseInternal(player, submitted, catalogCycle));
+    }
+    private static PurchaseResult purchaseInternal(ServerPlayer player, ShopReward submitted, long catalogCycle) {
 		if (!KarmaGameRules.enabled(player, KarmaGameRules.SHOP_ENABLED)) return PurchaseResult.failure("The shop is disabled for this world.");
 		if (submitted == null) return PurchaseResult.failure("That shop item is unavailable.");
 		ShopReward reward = rewardsFor(submitted.category(), catalogCycle).stream()
@@ -115,30 +118,14 @@ public final class KarmaShopCatalog {
 		ItemStack rewardStack = createStack(player, reward, catalogCycle);
 		if (rewardStack.isEmpty()) return PurchaseResult.failure("This shop reward is currently unavailable.");
 		if (!hasInventoryCapacity(player, rewardStack)) return PurchaseResult.failure("Your inventory does not have enough space.");
-        int[] tokensSpent = new int[SocialTokenService.Origin.values().length];
-        if (usesInfluence(reward)) {
-            int remaining = cost;
-            for (SocialTokenService.Origin origin : SocialTokenService.Origin.values()) {
-                int removed = SocialTokenService.remove(player, Math.min(remaining, SocialTokenService.count(player, origin)), origin);
-                tokensSpent[origin.ordinal()] = removed;
-                remaining -= removed;
-            }
-            if (remaining != 0) {
-                refundTokens(player, tokensSpent);
-                return PurchaseResult.failure("Your physical Influence changed. Try again.");
-            }
-        } else spend(player, reward, cost);
+        spend(player, reward, cost);
 		if (!player.addItem(rewardStack)) {
 			// The capacity check above should make this unreachable, but never consume
 			// currency if a last-second inventory change invalidates it.
-			if (usesInfluence(reward)) refundTokens(player, tokensSpent);
-            else refund(player, reward, cost);
+			refund(player, reward, cost);
 			return PurchaseResult.failure("Your inventory no longer has enough space.");
 		}
-        if (usesInfluence(reward)) {
-            KicHistoryService.recordInfluence(player, -cost, "bought " + reward.displayName());
-            player.sendSystemMessage(Component.literal("Influence -" + cost + " (bought " + reward.displayName() + ")"));
-        }
+
 		purchases.increment(player.getUUID(), reward.category(), reward.id(), catalogCycle);
 		KicHistoryService.recordEvent(player, "Purchased " + reward.displayName() + " x" + reward.count() + " from " + reward.category().displayName());
 		KicUiText.success(player);
@@ -153,22 +140,13 @@ public final class KarmaShopCatalog {
 		return createStack(player, reward, cycle);
 	}
 
-    private static boolean usesInfluence(ShopReward reward) {
-        return reward.item() == net.minecraft.world.item.Items.TOTEM_OF_UNDYING;
-    }
-
-    private static void refundTokens(ServerPlayer player, int[] spent) {
-        for (SocialTokenService.Origin origin : SocialTokenService.Origin.values())
-            if (spent[origin.ordinal()] > 0) SocialTokenService.insert(player, spent[origin.ordinal()], origin);
-    }
 
 	public static int scaledCost(ServerPlayer player, ShopReward reward) {
-		return usesInfluence(reward) ? reward.cost() : CommunityProgressionService.scaleShopCost(player, reward.cost());
+		return reward.item() == net.minecraft.world.item.Items.TOTEM_OF_UNDYING ? reward.cost() : CommunityProgressionService.scaleShopCost(player, reward.cost());
 	}
 
 	public static String priceLabel(ServerPlayer player, ShopReward reward) {
 		int cost = scaledCost(player, reward);
-        if (usesInfluence(reward)) return cost + " Influence";
 		return switch (reward.shrineType()) {
 			case LIGHT, NEUTRAL -> cost + " Reputation";
 			case DARK -> cost + " Infamy";
@@ -179,9 +157,9 @@ public final class KarmaShopCatalog {
 
 	public static String balanceLabel(ServerPlayer player, ShopReward reward) {
         boolean dark = reward.shrineType() == ShrineType.DARK;
-        int balance = usesInfluence(reward) ? SocialTokenService.count(player) : dark ? KarmaService.getInfamyPoints(player) : SocialCurrencyService.getReputation(player);
+        int balance = dark ? KarmaService.getInfamyPoints(player) : SocialCurrencyService.getReputation(player);
         int cost = scaledCost(player, reward);
-        return (balance >= cost ? "Ready: " : "Missing: ") + (usesInfluence(reward) ? "Influence " : dark ? "Infamy " : "Reputation ") + balance + "/" + cost;
+        return (balance >= cost ? "Ready: " : "Missing: ") + (dark ? "Infamy " : "Reputation ") + balance + "/" + cost;
     }
 
     public static String purchaseBlocker(ServerPlayer player, ShopReward reward, long cycle) {
@@ -231,7 +209,7 @@ public final class KarmaShopCatalog {
 	}
 
 	private static boolean canAfford(ServerPlayer player, ShopReward reward, int cost) {
-        if (usesInfluence(reward)) return SocialTokenService.count(player) >= cost;
+        
 		return switch (reward.shrineType()) {
 			case LIGHT, NEUTRAL -> SocialCurrencyService.getReputation(player) >= cost;
 			case DARK -> KarmaService.getInfamyPoints(player) >= cost;
@@ -243,7 +221,7 @@ public final class KarmaShopCatalog {
 	private static void spend(ServerPlayer player, ShopReward reward, int cost) {
 		switch (reward.shrineType()) {
 			case LIGHT, NEUTRAL -> SocialCurrencyService.addReputation(player, -cost, "bought " + reward.displayName());
-			case DARK -> KarmaService.spendInfamyPoints(player, cost);
+			case DARK -> KarmaService.addInfamyPoints(player, -cost, "bought " + reward.displayName());
 			case MONUMENT -> throw new IllegalStateException("Monument shop rewards must use the Light or Dark shop sections");
 			case null -> throw new IllegalStateException("Shop reward has no shrine section");
 		}
@@ -259,7 +237,6 @@ public final class KarmaShopCatalog {
 	}
 
 	private static String costMessage(ShopReward reward, int cost) {
-        if (usesInfluence(reward)) return "You need " + cost + " physical Influence of any origin.";
 		return switch (reward.shrineType()) {
 			case LIGHT, NEUTRAL -> "You need " + cost + " Reputation.";
 			case DARK -> "You need " + cost + " Infamy.";

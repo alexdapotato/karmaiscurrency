@@ -81,22 +81,21 @@ public final class SocialCurrencyService {
 		int before = getReputation(player);
         int total = Math.max(0, amount);
         score(player, REPUTATION_OBJECTIVE, "Reputation").set(total);
-        if (total != before) player.sendSystemMessage(Component.literal("Reputation " + (total > before ? "+" : "") + (total - before) + " (set Reputation) | Total: " + total));
+        KicHistoryService.recordSocial(player, "Reputation", total - before, "Debug set Reputation");
+        KicMessages.change(player, "Reputation", total - before, "Debug set Reputation");
 	}
 
 	public static int addReputation(ServerPlayer player, int amount, String reason) {
 		if (amount == 0) return getReputation(player);
 		ScoreAccess reputation = score(player, REPUTATION_OBJECTIVE, "Reputation");
 		int before = reputation.get();
-		int total = Math.max(0, before + amount);
+		int total = (int) Math.clamp((long) before + amount, 0L, Integer.MAX_VALUE);
 		reputation.set(total);
 		KicHistoryService.recordSocial(player, "Reputation", total - before, reason);
-		if (amount > 0 && !"Influence redemption".equals(reason) && !"shop purchase refund".equals(reason)) {
-			CommunityProgressionService.recordReputation(player, amount);
+		if (amount > 0 && !reason.toLowerCase(java.util.Locale.ROOT).startsWith("debug") && !"Influence redemption".equals(reason) && !"shop purchase refund".equals(reason)) {
+			CommunityProgressionService.recordReputation(player, total - before);
 		}
-		player.sendSystemMessage(Component.literal(
-			"Reputation " + (total > before ? "+" : "") + (total - before) + " (" + reason + ") | Total: " + total
-		));
+		KicMessages.change(player, "Reputation", total - before, reason);
 		return total;
 	}
 
@@ -160,11 +159,14 @@ public final class SocialCurrencyService {
 		if (tokenCount <= 0) return net.minecraft.world.item.ItemStack.EMPTY;
 		if (source == RedemptionTarget.REPUTATION) {
 			score(player, REPUTATION_OBJECTIVE, "Reputation").add(-sourceAmount);
-			KicHistoryService.recordSocial(player, "Reputation", -sourceAmount, "materialized into Influence");
+			KicHistoryService.recordSocial(player, "Reputation", -sourceAmount, "Materialization");
+            KicMessages.change(player, "Reputation", -sourceAmount, "Materialization");
+            KicMessages.change(player, "Physical Influence", tokenCount, "Materialization");
 			KicHistoryService.recordInfluence(player, tokenCount, "materialized from Reputation");
 			return SocialTokenService.createToken(tokenCount, SocialTokenService.Origin.LIGHT);
 		}
-		KarmaService.spendInfamyPoints(player, sourceAmount);
+		KarmaService.addInfamyPoints(player, -sourceAmount, "Materialization");
+        KicMessages.change(player, "Physical Influence", tokenCount, "Materialization");
 		KicHistoryService.recordInfluence(player, tokenCount, "materialized from Infamy");
 		return SocialTokenService.createToken(tokenCount, SocialTokenService.Origin.DARK);
 	}
@@ -176,6 +178,13 @@ public final class SocialCurrencyService {
 			? SocialTokenService.Origin.LIGHT : SocialTokenService.Origin.DARK);
 		return stack.getCount();
 	}
+
+    public static int redeemableInfluence(ServerPlayer player) {
+        var stance = getStance(player);
+        int neutral = SocialTokenService.count(player, SocialTokenService.Origin.NEUTRAL);
+        return neutral + (stance == Stance.NEUTRAL ? 0 : SocialTokenService.count(player,
+            stance == Stance.LIGHT ? SocialTokenService.Origin.LIGHT : SocialTokenService.Origin.DARK));
+    }
 
 	public static int redeem(ServerPlayer player, int tokenAmount, RedemptionTarget target) {
 		if (tokenAmount <= 0) return 0;
@@ -219,10 +228,12 @@ public final class SocialCurrencyService {
 		}
 		if (removed != tokenAmount) return 0;
 		KicHistoryService.recordInfluence(player, -tokenAmount, "redeemed into " + target.displayName());
+        KicMessages.change(player, "Physical Influence", -tokenAmount, "Influence redemption");
 
 		if (target == RedemptionTarget.REPUTATION) {
 			score(player, REPUTATION_OBJECTIVE, "Reputation").add(output);
 			KicHistoryService.recordSocial(player, "Reputation", output, "Influence redemption");
+            KicMessages.change(player, "Reputation", output, "Influence redemption");
 		} else {
 			KarmaService.addInfamyPoints(player, output, "Influence redemption");
 		}
@@ -245,10 +256,11 @@ public final class SocialCurrencyService {
 		int net = offeringNet(amount);
 		SocialTokenService.remove(player, amount);
 		KicHistoryService.recordInfluence(player, -amount, "Influence dematerialization");
+        KicMessages.change(player, "Physical Influence", -amount, "Influence dematerialization");
 		String target = switch (KarmaService.rewardAlignment(player)) {
 			case LIGHT -> { addReputation(player, net, "Influence dematerialization"); yield "Reputation"; }
 			case DARK -> { KarmaService.addInfamyPoints(player, net, "Influence dematerialization"); yield "Infamy"; }
-			case NEUTRAL -> { SocialTokenService.insert(player, net, SocialTokenService.Origin.NEUTRAL); yield "Neutral Influence"; }
+			case NEUTRAL -> { SocialTokenService.insert(player, net, SocialTokenService.Origin.NEUTRAL); KicMessages.change(player, "Physical Influence", net, "Influence dematerialization"); yield "Neutral Influence"; }
 		};
 		startDematerializationCooldown(player);
 		KicUiText.success(player);
@@ -325,7 +337,7 @@ public final class SocialCurrencyService {
 		switch (stance) {
 			case LIGHT -> { addReputation(player, netValue, "Shrine offering"); target = "Reputation"; }
 			case DARK -> { KarmaService.addInfamyPoints(player, netValue, "Shrine offering"); target = "Infamy"; }
-			case NEUTRAL -> { SocialTokenService.insert(player, netValue, SocialTokenService.Origin.NEUTRAL); target = "Neutral Influence"; }
+			case NEUTRAL -> { SocialTokenService.insert(player, netValue, SocialTokenService.Origin.NEUTRAL); KicMessages.change(player, "Physical Influence", netValue, "Shrine offering"); target = "Neutral Influence"; }
 			default -> throw new IllegalStateException("Unhandled stance " + stance);
 		}
 		startDematerializationCooldown(player);

@@ -116,7 +116,7 @@ public final class QuestMenu extends KarmaMenu {
         }
         if (slotId == HUNT_SLOT) {
             if (!KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)) {
-                player.sendSystemMessage(Component.literal("Quests are disabled by the quests_enabled gamerule."));
+                player.sendSystemMessage(Component.literal("Quests are disabled in this world."));
                 refresh();
                 return;
             }
@@ -185,7 +185,7 @@ public final class QuestMenu extends KarmaMenu {
             "Shared KIC cycle.", QuestService.nextCycleStatus(),
             KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
                 ? "Quest pools are shared by the server and fixed for this cycle."
-                : "Quests are disabled by the quests_enabled gamerule."));
+                : "Quests are disabled in this world."));
 
         QuestService.QuestId active = QuestService.activeQuest(player);
         display.setItem(ACTIVE_COUNT, ShrineMenu.icon(Items.NETHER_STAR,

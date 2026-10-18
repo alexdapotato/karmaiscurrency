@@ -70,7 +70,7 @@ public final class DarkShrineMenu extends KarmaMenu {
 		display.setItem(CURSES, ShrineMenu.icon(Items.BLAZE_POWDER, "Dark Curses",
 			"Spend Infamy for dark power."));
 		display.setItem(SHOP, ShrineMenu.icon(Items.CHEST, "Dark Shop",
-			"Buy items with Infamy Points."));
+			"Buy items with Infamy."));
 		display.setItem(BACK, ShrineMenu.icon(Items.ARROW, "Back", "Return to the shrine menu."));
 	}
 }

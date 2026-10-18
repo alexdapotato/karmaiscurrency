@@ -86,9 +86,9 @@ public final class KicHistoryMenu extends KarmaMenu {
 
     private static ItemStack icon(net.minecraft.world.item.Item item, String name, String... lore) {
         ItemStack stack = new ItemStack(item);
-        stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
+        stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(name));
         if (lore.length > 0) stack.set(DataComponents.LORE,
-            new ItemLore(java.util.Arrays.stream(lore).<Component>map(Component::literal).toList()));
+            new ItemLore(KicUiText.lore(lore)));
         return stack;
     }
 }

@@ -68,7 +68,7 @@ public final class LightShrineMenu extends KarmaMenu {
         if (!CurseBlessingService.canUseLightShrine(player)) {
             display.setItem(HEADER, ShrineMenu.icon(Items.BARRIER, "Blessings Unavailable",
                 "The Devil prevents access to Light Shrines.",
-                "Purification is the future neutral escape route."));
+                "This commitment prevents access."));
             display.setItem(BACK, ShrineMenu.icon(Items.ARROW, "Back", "Return to the shrine menu."));
             return;
         }
@@ -76,7 +76,7 @@ public final class LightShrineMenu extends KarmaMenu {
         display.setItem(HEADER, ShrineMenu.icon(Items.EMERALD_BLOCK, "Blessings",
             "Reputation: " + SocialCurrencyService.getReputation(player),
             CurseBlessingService.slotSummary(player), CurseBlessingService.sigilDetails(player),
-            CurseBlessingService.isDevoted(player) ? "Devotion grants one Blessing slot." : "One type slot per distinct Sigil; one stack slot per stack."));
+            CurseBlessingService.isDevoted(player) ? "Devotion allows 3 Blessing types; no Curses." : "One type slot per distinct Sigil; one stack slot per stack."));
 
         int slot = FIRST_BLESSING;
         for (CurseBlessingRegistry.BlessingDefinition blessing : currentBlessings()) {
@@ -100,8 +100,8 @@ public final class LightShrineMenu extends KarmaMenu {
         return CurseBlessingRegistry.liveBlessings(CommunityProgressionService.stage(player));
     }
 
-    private static String costLine(CurseBlessingRegistry.BlessingDefinition blessing) {
-        return "Cost: " + CurseBlessingRegistry.costDescription(blessing.cost());
+    private String costLine(CurseBlessingRegistry.BlessingDefinition blessing) {
+        return "Cost: " + CurseBlessingRegistry.costDescription(CurseBlessingService.activationCosts(player, true, blessing.id()));
     }
 
     private static net.minecraft.world.item.Item iconFor(String id) {

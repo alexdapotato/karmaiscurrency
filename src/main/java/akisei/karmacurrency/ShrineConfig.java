@@ -24,8 +24,8 @@ public final class ShrineConfig {
 	public final int karmaVillagerKill, karmaPlayerKillBase, karmaPlayerKillMax, karmaPlayerKillVictimBonusDivisor;
 	public final int karmaPlayerKillCooldownMinutes;
 	public final int karmaCap, karmaHeartThreshold, karmaMaxBonusHalfHearts, karmaDecayIntervalMinutes, karmaDecayPercent;
-	public final int reputationDecayIntervalMinutes, reputationDecayPerInterval;
-	public final int infamyDecayIntervalMinutes, infamyDecayPerInterval;
+	public final int reputationDecayIntervalMinutes, reputationDecayPercent;
+	public final int infamyDecayIntervalMinutes, infamyDecayPercent;
 	public final int socialAlignedGainPercent, socialNeutralGainPercent, socialOpposedGainPercent, socialDiminishingReturnWindowMinutes;
 	public final int socialTradeGain, socialVillagerKillGain, socialCureGain, socialEnderDragonGain, socialWitherGain;
 	public final int socialPlayerKillGain, socialRaidHeroGain, socialRaidCaptainGain, socialMercyTrialGain, socialProtectionTrialGain;
@@ -47,8 +47,8 @@ public final class ShrineConfig {
 		int karmaVillagerKill, int karmaPlayerKillBase, int karmaPlayerKillMax, int karmaPlayerKillVictimBonusDivisor,
 		int karmaPlayerKillCooldownMinutes,
 		int karmaCap, int karmaHeartThreshold, int karmaMaxBonusHalfHearts, int karmaDecayIntervalMinutes, int karmaDecayPercent,
-		int reputationDecayIntervalMinutes, int reputationDecayPerInterval,
-		int infamyDecayIntervalMinutes, int infamyDecayPerInterval,
+		int reputationDecayIntervalMinutes, int reputationDecayPercent,
+		int infamyDecayIntervalMinutes, int infamyDecayPercent,
 		int socialAlignedGainPercent, int socialNeutralGainPercent, int socialOpposedGainPercent, int socialDiminishingReturnWindowMinutes,
 		int socialTradeGain, int socialVillagerKillGain, int socialCureGain, int socialEnderDragonGain, int socialWitherGain,
 		int socialPlayerKillGain, int socialRaidHeroGain, int socialRaidCaptainGain, int socialMercyTrialGain, int socialProtectionTrialGain,
@@ -85,9 +85,9 @@ public final class ShrineConfig {
 		this.karmaDecayIntervalMinutes = karmaDecayIntervalMinutes;
 		this.karmaDecayPercent = karmaDecayPercent;
 		this.reputationDecayIntervalMinutes = reputationDecayIntervalMinutes;
-		this.reputationDecayPerInterval = reputationDecayPerInterval;
+		this.reputationDecayPercent = reputationDecayPercent;
 		this.infamyDecayIntervalMinutes = infamyDecayIntervalMinutes;
-		this.infamyDecayPerInterval = infamyDecayPerInterval;
+		this.infamyDecayPercent = infamyDecayPercent;
 		this.socialAlignedGainPercent = socialAlignedGainPercent;
 		this.socialNeutralGainPercent = socialNeutralGainPercent;
 		this.socialOpposedGainPercent = socialOpposedGainPercent;
@@ -150,7 +150,17 @@ public final class ShrineConfig {
 			KarmaIsCurrency.LOGGER.error("Could not read config {}", FILE, exception);
 		}
 
-		current = new ShrineConfig(
+		if (!properties.containsKey("social.decayVersion")) {
+            properties.setProperty("social.decayVersion", "2");
+            for (String currency : new String[]{"reputation", "infamy"}) {
+                properties.setProperty("social." + currency + "DecayIntervalMinutes", "240");
+                properties.setProperty("social." + currency + "DecayPercent", "5");
+                properties.remove("social." + currency + "DecayPerInterval");
+            }
+            try (var out = java.nio.file.Files.newOutputStream(FILE)) { properties.store(out, "KIC configuration"); }
+            catch (java.io.IOException e) { KarmaIsCurrency.LOGGER.error("Could not save decay migration", e); }
+        }
+        current = new ShrineConfig(
 			getBoolean(properties, "shrines.enabled", true),
 			getBoolean(properties, "shrines.preGenerationDiscovery", true),
 			getInt(properties, "shrines.ringDistance", 1000, 1, 30000),
@@ -179,10 +189,10 @@ public final class ShrineConfig {
 			getInt(properties, "karma.maxBonusHalfHearts", 10, 0, 10),
 			getInt(properties, "karma.decayIntervalMinutes", 360, 1, 1000000),
 			getInt(properties, "karma.decayPercent", 5, 0, 100),
-			getInt(properties, "social.reputationDecayIntervalMinutes", 120, 1, 1000000),
-			getInt(properties, "social.reputationDecayPerInterval", 0, 0, 1000000),
-			getInt(properties, "social.infamyDecayIntervalMinutes", 120, 1, 1000000),
-			getInt(properties, "social.infamyDecayPerInterval", 0, 0, 1000000),
+			getInt(properties, "social.reputationDecayIntervalMinutes", 240, 1, 1000000),
+			getInt(properties, "social.reputationDecayPercent", 5, 0, 100),
+			getInt(properties, "social.infamyDecayIntervalMinutes", 240, 1, 1000000),
+			getInt(properties, "social.infamyDecayPercent", 5, 0, 100),
 			getInt(properties, "social.alignedGainPercent", 125, 0, 1000),
 			getInt(properties, "social.neutralGainPercent", 100, 0, 1000),
 			getInt(properties, "social.opposedGainPercent", 75, 0, 1000),
@@ -239,8 +249,8 @@ public final class ShrineConfig {
 		p.setProperty("karma.trade", "1"); p.setProperty("karma.tradeBatch", "12"); p.setProperty("karma.cureZombieVillager", "4"); p.setProperty("karma.enderDragon", "30"); p.setProperty("karma.wither", "30");
 		p.setProperty("karma.villagerKill", "5"); p.setProperty("karma.playerKillBase", "10"); p.setProperty("karma.playerKillMax", "25"); p.setProperty("karma.playerKillVictimBonusDivisor", "5"); p.setProperty("karma.playerKillCooldownMinutes", "30");
 				p.setProperty("karma.cap", "1000"); p.setProperty("karma.heartThreshold", "75"); p.setProperty("karma.maxBonusHalfHearts", "10"); p.setProperty("karma.decayIntervalMinutes", "360"); p.setProperty("karma.decayPercent", "5");
-		p.setProperty("social.reputationDecayIntervalMinutes", "120"); p.setProperty("social.reputationDecayPerInterval", "0");
-		p.setProperty("social.infamyDecayIntervalMinutes", "120"); p.setProperty("social.infamyDecayPerInterval", "0");
+		p.setProperty("social.reputationDecayIntervalMinutes", "240"); p.setProperty("social.reputationDecayPercent", "5");
+		p.setProperty("social.infamyDecayIntervalMinutes", "240"); p.setProperty("social.infamyDecayPercent", "5");
 		p.setProperty("social.alignedGainPercent", "125"); p.setProperty("social.neutralGainPercent", "100"); p.setProperty("social.opposedGainPercent", "75"); p.setProperty("social.diminishingReturnWindowMinutes", "30"); p.setProperty("social.tradeGain", "2"); p.setProperty("social.villagerKillGain", "1"); p.setProperty("social.cureGain", "5"); p.setProperty("social.enderDragonGain", "80"); p.setProperty("social.witherGain", "80");
 		p.setProperty("social.playerKillGain", "10"); p.setProperty("social.raidHeroGain", "25"); p.setProperty("social.raidCaptainGain", "10"); p.setProperty("social.mercyTrialGain", "25"); p.setProperty("social.protectionTrialGain", "10");
 		p.setProperty("social.materializationPercent", "100"); p.setProperty("social.neutralRedemptionPercent", "100"); p.setProperty("social.alignedRedemptionPercent", "100"); p.setProperty("social.dematerializationCooldownSeconds", "0");

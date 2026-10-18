@@ -38,6 +38,7 @@ public final class CommunityProgressionService extends SavedData {
         KarmaIsCurrency.id("community_progression"), CommunityProgressionService::new, CODEC, null
     );
 
+    private final int[] thresholds = STAGE_THRESHOLDS.clone();
     private int reputationEarned;
     private int infamyEarned;
     private int influenceContributed;
@@ -77,12 +78,14 @@ public final class CommunityProgressionService extends SavedData {
             legacyCommunityPool = safeAdd(oldLightPool, oldDarkPool);
         }
 
-        return new CommunityProgressionService(
-            reputationEarned, infamyEarned, influenceContributed, legacyCommunityPool);
+        CommunityProgressionService data = new CommunityProgressionService(reputationEarned, infamyEarned, influenceContributed, legacyCommunityPool);
+        for (int i = 0; i < MAX_STAGE; i++) data.thresholds[i] = values.getOrDefault("threshold_" + (i + 1), STAGE_THRESHOLDS[i]);
+        return data;
     }
 
     private Map<String, Integer> toMap() {
         Map<String, Integer> values = new HashMap<>();
+        for (int i = 0; i < MAX_STAGE; i++) values.put("threshold_" + (i + 1), thresholds[i]);
         values.put(REPUTATION_EARNED, reputationEarned);
         values.put(INFAMY_EARNED, infamyEarned);
         values.put(INFLUENCE_CONTRIBUTED, influenceContributed);
@@ -107,41 +110,22 @@ public final class CommunityProgressionService extends SavedData {
     }
 
     /**
-     * Contributes any physical Influence to the single shared World Progression pool.
-     * Light, Neutral, and Dark origins are all valid; origin is not used for progression.
+     * Contributes the preferred stored social balance to the shared world pool.
      */
     public static boolean contributeInfluence(ServerPlayer player, int amount) {
         if (amount <= 0 || !KarmaGameRules.enabled(player, KarmaGameRules.SOCIAL_CURRENCY_ENABLED)) return false;
 
-        if (SocialTokenService.count(player) < amount) return false;
-
-        int remaining = amount;
-        int[] removedByOrigin = new int[SocialTokenService.Origin.values().length];
-        for (SocialTokenService.Origin origin : SocialTokenService.Origin.values()) {
-            if (remaining <= 0) break;
-            int available = SocialTokenService.count(player, origin);
-            int toRemove = Math.min(remaining, available);
-            int removed = SocialTokenService.remove(player, toRemove, origin);
-            removedByOrigin[origin.ordinal()] = removed;
-            remaining -= removed;
-        }
-
-        if (remaining > 0) {
-            // Restore exactly what was removed, preserving every token's origin.
-            for (SocialTokenService.Origin origin : SocialTokenService.Origin.values()) {
-                int removed = removedByOrigin[origin.ordinal()];
-                if (removed > 0) SocialTokenService.insert(player, removed, origin);
-            }
-            return false;
-        }
+        if (availableInfluence(player) < amount || (long)get(player.level().getServer()).pool() + amount > Integer.MAX_VALUE) return false;
+        if (KarmaService.rewardAlignment(player) == SocialCurrencyService.Stance.DARK)
+            KarmaService.addInfamyPoints(player, -amount, "World contribution");
+        else SocialCurrencyService.addReputation(player, -amount, "World contribution");
 
         CommunityProgressionService data = get(player.level().getServer());
         data.influenceContributed = safeAdd(data.influenceContributed, amount);
         data.setDirty();
-        KicHistoryService.recordInfluence(player, -amount, "submitted to World Progression");
         KicHistoryService.recordContribution(player, amount);
         recordPersonalContribution(player, amount);
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(KicFlavorText.contribution(amount)));
+
         KicUiText.success(player);
         return true;
     }
@@ -211,7 +195,7 @@ public final class CommunityProgressionService extends SavedData {
     public int pool() { return safeAdd(legacyCommunityPool, influenceContributed); }
 
     public int stage() {
-        return stageForPool(pool());
+        return KicBalanceRules.stage(pool(), thresholds);
     }
 
     public static int stageForPool(int pool) {
@@ -223,14 +207,42 @@ public final class CommunityProgressionService extends SavedData {
         return stage;
     }
 
-    public static int thresholdForStage(int stage) {
-        return stage <= 0 ? 0 : STAGE_THRESHOLDS[Math.clamp(stage - 1, 0, MAX_STAGE - 1)];
+    public int thresholdForStage(int stage) {
+        return stage <= 0 ? 0 : thresholds[Math.clamp(stage - 1, 0, MAX_STAGE - 1)];
     }
 
-    public static int nextStageThreshold(int stage) {
+    public int nextStageThreshold(int stage) {
         return stage < MAX_STAGE
-            ? STAGE_THRESHOLDS[Math.clamp(stage, 0, MAX_STAGE - 1)]
-            : STAGE_THRESHOLDS[MAX_STAGE - 1];
+            ? thresholds[Math.clamp(stage, 0, MAX_STAGE - 1)]
+            : thresholds[MAX_STAGE - 1];
+    }
+
+    public static String contributionCurrency(ServerPlayer player) {
+        return KarmaService.rewardAlignment(player) == SocialCurrencyService.Stance.DARK ? "Infamy" : "Reputation";
+    }
+    public static String contributionReview(ServerPlayer player) {
+        var data = get(player.level().getServer());
+        return data.pool() + ":" + java.util.Arrays.toString(data.thresholds) + ":" + contributionCurrency(player);
+    }
+    public static int availableInfluence(ServerPlayer player) {
+        return KarmaService.rewardAlignment(player) == SocialCurrencyService.Stance.DARK
+            ? KarmaService.getInfamyPoints(player) : SocialCurrencyService.getReputation(player);
+    }
+    public void setPool(int amount) {
+        legacyCommunityPool = Math.max(0, amount);
+        influenceContributed = 0;
+        setDirty();
+    }
+    public boolean setThreshold(int stage, int threshold) {
+        if (!KicBalanceRules.validThreshold(stage, threshold, thresholds)) return false;
+        if (stage == 0) return true;
+        thresholds[stage - 1] = threshold;
+        setDirty();
+        return true;
+    }
+    public String debugSummary() {
+        return "World stage: " + stage() + "/" + MAX_STAGE + "\nCommunity Influence: " + formatInfluence(pool())
+            + "\nStage thresholds: " + java.util.Arrays.toString(thresholds);
     }
 
     public static String formatInfluence(int amount) {

@@ -20,15 +20,17 @@ public final class CurseBlessingRegistry {
 
     public enum SigilDuration { TEMPORARY, PERMANENT }
 
-    public record ItemCost(Item item, int count, boolean influence) {
-        public ItemCost(Item item, int count) { this(item, count, false); }
-        public static ItemCost influence(int count) { return new ItemCost(Items.ECHO_SHARD, count, true); }
+    public record ItemCost(Item item, int count, boolean influence, boolean reputation) {
+        public ItemCost(Item item, int count) { this(item, count, false, false); }
+        public static ItemCost influence(int count) { return new ItemCost(Items.ECHO_SHARD, count, true, false); }
+        public static ItemCost reputation(int count) { return new ItemCost(Items.EMERALD, count, true, true); }
         public boolean matches(ItemStack stack) {
+            if (item == Items.ENCHANTED_BOOK) return stack.is(Items.ENCHANTED_BOOK) && stack.getOrDefault(net.minecraft.core.component.DataComponents.STORED_ENCHANTMENTS, net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY).entrySet().stream().anyMatch(e -> e.getKey().is(net.minecraft.world.item.enchantment.Enchantments.SHARPNESS) && e.getIntValue() >= 5);
             return influence ? SocialTokenService.isToken(stack)
                 : stack.is(item) && !SocialTokenService.isToken(stack);
         }
         public ItemCost { count = Math.max(1, count); }
-        public String displayName() { return count + " " + (influence ? "Influence (any origin)" : new ItemStack(item).getHoverName().getString()); }
+        public String displayName() { return count + " " + (influence ? (reputation ? "Reputation" : "Infamy") : (item == Items.ENCHANTED_BOOK ? "Sharpness V book" : new ItemStack(item).getHoverName().getString())); }
     }
 
     public record CurseDefinition(int storageId, String id, String name, int maxStacks,
@@ -47,7 +49,7 @@ public final class CurseBlessingRegistry {
     private static final Map<Integer, CurseDefinition> CURSES_BY_STORAGE_ID = new LinkedHashMap<>();
     private static final Map<Integer, BlessingDefinition> BLESSINGS_BY_STORAGE_ID = new LinkedHashMap<>();
     private static final List<String> LIVE_BLESSINGS = List.of(
-        "watcher", "swiftness", "protection", "depth", "devotion", "hunter", "fortune", "haste", "harvest", "aegis");
+        "protection", "depth", "devotion", "hunter", "fortune", "haste", "aegis");
     private static final List<String> LIVE_CURSES = List.of(
         "predator", "justice", "devil", "hanged_man", "temperance", "hollow", "insomnia", "executioner", "duelist", "fettered");
 
@@ -62,7 +64,7 @@ public final class CurseBlessingRegistry {
         registerCurse(7, "hierophant", "The Hierophant", 1, SigilClassification.MINOR, List.of(), false);
         registerCurse(8, "strength", "Strength", 3, SigilClassification.MINOR, List.of(), false);
         registerCurse(9, "justice", "Justice", 2, SigilClassification.MAJOR,
-            List.of(ItemCost.influence(60), new ItemCost(Items.IRON_INGOT, 10)), true);
+            List.of(ItemCost.influence(75), new ItemCost(Items.IRON_INGOT, 64)), true);
         registerCurse(10, "hanged_man", "The Hanged Man", 1, SigilClassification.MAJOR,
             List.of(ItemCost.influence(40), new ItemCost(Items.LEAD, 10)), true);
         registerCurse(11, "temperance", "Temperance", 1, SigilClassification.MAJOR,
@@ -71,7 +73,7 @@ public final class CurseBlessingRegistry {
         registerCurse(13, "moon", "The Moon", 1, SigilClassification.MAJOR, List.of(), false);
         registerCurse(14, "lovers", "The Lovers", 1, SigilClassification.MAJOR, List.of(), false);
         registerCurse(15, "devil", "The Devil", 1, SigilClassification.MAJOR,
-            List.of(new ItemCost(Items.NETHERITE_INGOT, 5)), true);
+            List.of(new ItemCost(Items.NETHERITE_INGOT, 3)), true);
         registerCurse(16, "berserker", "Berserker", 1, SigilClassification.MAJOR, List.of(), false);
         registerCurse(17, "parasite", "Parasite", 1, SigilClassification.MAJOR, List.of(), false);
         registerCurse(18, "hollow", "Hollow", 1, SigilClassification.MAJOR,
@@ -81,23 +83,23 @@ public final class CurseBlessingRegistry {
         registerCurse(21, "insomnia", "Insomnia", 1, SigilClassification.MINOR,
             List.of(ItemCost.influence(60), new ItemCost(Items.FEATHER, 80), new ItemCost(Items.DIAMOND, 20)), true);
         registerCurse(22, "predator", "Predator", 1, SigilClassification.MAJOR,
-            List.of(ItemCost.influence(30), new ItemCost(Items.ROTTEN_FLESH, 10)), true);
+            List.of(ItemCost.influence(100), new ItemCost(Items.DIAMOND, 16)), true);
         registerCurse(23, "bard", "Curse of the Bard", 1, SigilClassification.MINOR, List.of(), false);
         registerCurse(24, "sun", "The Sun", 1, SigilClassification.MAJOR, List.of(), false);
         registerCurse(25, "executioner", "Executioner", 1, SigilClassification.MAJOR,
-            List.of(ItemCost.influence(60), new ItemCost(Items.IRON_INGOT, 60)), true);
+            List.of(ItemCost.influence(100), new ItemCost(Items.ENCHANTED_BOOK, 1)), true);
         registerCurse(26, "duelist", "Duelist", 1, SigilClassification.MAJOR,
             List.of(ItemCost.influence(80), new ItemCost(Items.DIAMOND_SWORD, 2), new ItemCost(Items.DIAMOND, 20)), true);
-        registerCurse(27, "fettered", "Fettered", 1, SigilClassification.MAJOR,
-            List.of(ItemCost.influence(60), new ItemCost(Items.OBSIDIAN, 10)), true);
+        registerCurse(27, "fettered", "Fettered", 4, SigilClassification.MAJOR,
+            List.of(ItemCost.influence(60), new ItemCost(Items.OBSIDIAN, 32)), true);
 
         registerBlessing(1, "watcher", "Watcher", 8, SigilClassification.MINOR,
-            List.of(new ItemCost(Items.EMERALD, 32)), true);
+            List.of(new ItemCost(Items.EMERALD, 32)), false);
         registerBlessing(2, "smite", "Smite", 8, SigilClassification.MAJOR, List.of(), false);
         registerBlessing(3, "devotion", "Devotion", 1, SigilClassification.MAJOR,
-            List.of(new ItemCost(Items.NETHERITE_INGOT, 4)), true);
+            List.of(new ItemCost(Items.NETHERITE_INGOT, 3)), true);
         registerBlessing(4, "swiftness", "Swiftness", 1, SigilClassification.MINOR,
-            List.of(new ItemCost(Items.EMERALD, 24)), true);
+            List.of(new ItemCost(Items.EMERALD, 24)), false);
         registerBlessing(5, "giants", "Giants", 1, SigilClassification.MAJOR, List.of(), false);
         registerBlessing(6, "fortune", "Fortune", 1, SigilClassification.MINOR,
             List.of(new ItemCost(Items.EMERALD, 32)), true);
@@ -107,19 +109,19 @@ public final class CurseBlessingRegistry {
         registerBlessing(10, "night", "Blessing of the Night", 1, SigilClassification.MINOR, List.of(), false);
         registerBlessing(11, "smith", "Blessing of the Smith", 1, SigilClassification.MAJOR, List.of(), false);
         registerBlessing(12, "vanguard", "Blessing of the Vanguard", 1, SigilClassification.MAJOR, List.of(), false);
-        registerBlessing(13, "protection", "Protection", 1, SigilClassification.MAJOR,
-            List.of(new ItemCost(Items.EMERALD, 48)), true);
+        registerBlessing(13, "protection", "Protection", 2, SigilClassification.MAJOR,
+            List.of(ItemCost.reputation(60)), true);
         registerBlessing(14, "abundance", "Abundance", 1, SigilClassification.MAJOR, List.of(), false);
         registerBlessing(15, "mender", "Mender", 1, SigilClassification.MINOR, List.of(), false);
         registerBlessing(16, "depth", "Depth", 1, SigilClassification.MINOR,
             List.of(new ItemCost(Items.EMERALD, 24), new ItemCost(Items.PRISMARINE_CRYSTALS, 8)), true);
         registerBlessing(17, "prosperity", "Prosperity", 1, SigilClassification.MAJOR, List.of(), false);
-        registerBlessing(18, "hunter", "Hunter", 1, SigilClassification.MAJOR,
-            List.of(new ItemCost(Items.EMERALD, 48), new ItemCost(Items.DIAMOND, 8)), true);
-        registerBlessing(19, "haste", "Haste", 1, SigilClassification.MINOR,
-            List.of(new ItemCost(Items.EMERALD, 24)), true);
+        registerBlessing(18, "hunter", "Hunter", 2, SigilClassification.MAJOR,
+            List.of(ItemCost.reputation(150), new ItemCost(Items.DIAMOND, 8)), true);
+        registerBlessing(19, "haste", "Haste", 3, SigilClassification.MINOR,
+            List.of(ItemCost.reputation(60)), true);
         registerBlessing(20, "harvest", "Harvest", 1, SigilClassification.MINOR,
-            List.of(new ItemCost(Items.WHEAT, 16), new ItemCost(Items.CARROT, 16), new ItemCost(Items.POTATO, 16)), true);
+            List.of(new ItemCost(Items.WHEAT, 16), new ItemCost(Items.CARROT, 16), new ItemCost(Items.POTATO, 16)), false);
         registerBlessing(21, "aegis", "Aegis", 1, SigilClassification.MAJOR,
             List.of(new ItemCost(Items.EMERALD, 64), new ItemCost(Items.DIAMOND, 8)), true);
     }
@@ -145,7 +147,7 @@ public final class CurseBlessingRegistry {
                                      int unlockStage, boolean rotationEligible, int rotationWeight) {
         requireId(storageId, CURSES_BY_STORAGE_ID, "Curse");
         int minutes = 0;
-        List<String> requirements = requirements("Dark Shrine access required.", cost);
+        List<String> requirements = requirements(id.equals("devil") ? "Requires -300 Karma or lower (not consumed)." : "Dark Shrine access required.", cost);
         CurseDefinition definition = new CurseDefinition(storageId, id, name, Math.max(1, maxStacks), classification,
             curseIcon(id), List.of(classification.displayName(), "Curse Sigil"), curseEffectDescription(id),
             SigilDuration.PERMANENT, minutes, requirements, List.copyOf(cost), Math.max(0, unlockStage),
@@ -174,8 +176,8 @@ public final class CurseBlessingRegistry {
         requireId(storageId, BLESSINGS_BY_STORAGE_ID, "Blessing");
         boolean devotion = id.equals("devotion");
         boolean timed = List.of("watcher", "swiftness", "protection", "depth", "fortune", "haste").contains(id);
-        int minutes = timed ? 5 : 0;
-        List<String> requirements = requirements(devotion ? "Permanent Light commitment; purification required for removal."
+        int minutes = timed ? (id.equals("haste") ? 3 : 5) : 0;
+        List<String> requirements = requirements(devotion ? "Requires 300 Karma (not consumed). Permanent Light commitment."
             : "Light Shrine access required.", cost);
         BlessingDefinition definition = new BlessingDefinition(storageId, id, name, Math.max(1, maxStacks), classification,
             blessingIcon(id), List.of(classification.displayName(), "Blessing Sigil"), blessingEffectDescription(id),
@@ -208,13 +210,13 @@ public final class CurseBlessingRegistry {
             case "predator" -> "+20% damage against hostile mobs; take 15% more damage from players.";
             case "hanged_man" -> "+40% knockback resistance, -10% movement speed, -15% jump strength, +15% fall damage.";
             case "temperance" -> "+3 Defense and -2 Attack Damage.";
-            case "devil" -> "Dark commitment. Cannot use Light Shrines, removes Blessings, and grants +2 Curse slots. The commitment uses one Curse slot and one stack slot.";
+            case "devil" -> "Dark commitment. Cannot use Light Shrines, removes Blessings, and grants +2 shared stack slots (individual caps unchanged). The commitment uses one Curse slot and one stack slot.";
             case "strength" -> "+0.5 damage dealt and +0.5 damage taken per stack. Maximum 3 stacks (legacy).";
-            case "hollow" -> "+7.5% movement speed, +1 block and entity interaction range, -4 HP.";
+            case "hollow" -> "+9.5% movement speed, +1 block and entity interaction range, -4 HP.";
             case "insomnia" -> "+15% movement speed normally, +5% while in combat for 2 minutes after taking damage, and -2 Attack Damage.";
-            case "executioner" -> "+30% damage against targets below 50% HP; -20% against targets above 50% HP.";
+            case "executioner" -> "+25% damage against targets below 40% HP; -20% against targets above 50% HP.";
             case "duelist" -> "+25% player damage, -30% PvE damage, -3 Defense.";
-            case "fettered" -> "+5 Defense and +30% knockback resistance; -20% movement speed and jump strength.";
+            case "fettered" -> "Armor by stack: +2 / +3 / +5 / +6. Movement: -5% / -5% / -10% / -10%. +30% knockback resistance; jump strength -0.20.";
             case "bard" -> "Goat Horns buff nearby players and inflict a drawback on the Bard.";
             case "sun" -> "Day and night effects follow the existing Sun behavior.";
             case "fool" -> "-0.5 Luck, +20% speed, +1.5 block interaction range, and increased fall damage.";
@@ -226,12 +228,12 @@ public final class CurseBlessingRegistry {
         return switch (id) {
             case "watcher" -> "5 minutes of Night Vision.";
             case "swiftness" -> "+10% movement speed for 5 minutes.";
-            case "protection" -> "Resistance I for 5 minutes.";
+            case "protection" -> "+2 armor per stack; 5 minutes added per activation. Maximum 2 stacks.";
             case "depth" -> "Water Breathing and Dolphin's Grace for 5 minutes.";
-            case "devotion" -> "Permanent Light commitment; prevents Dark Shrine access and grants +1 Blessing slot. The commitment uses one Blessing slot and one stack slot.";
-            case "hunter" -> "+20% PvE damage and +10% ranged damage against hostile mobs.";
+            case "devotion" -> "Permanent Light commitment; prevents Dark Shrine access and allows 3 Blessing types and no Curses. The commitment uses one Blessing slot and one stack slot.";
+            case "hunter" -> "+5% damage against hostile mobs per stack; maximum +10%.";
             case "fortune" -> "+1 Fortune level for applicable block drops.";
-            case "haste" -> "Haste I for 5 minutes.";
+            case "haste" -> "3 minutes added per stack. Haste I at stacks 1–2; Haste II at stack 3.";
             case "harvest" -> "Increases crop output.";
             case "aegis" -> "10% chance to reduce an incoming hit by 50%; 15-second proc cooldown.";
             default -> "Gameplay effect is not part of the current live pool.";

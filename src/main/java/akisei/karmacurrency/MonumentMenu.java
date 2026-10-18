@@ -32,6 +32,7 @@ public final class MonumentMenu extends KarmaMenu {
 	}
 
 	public static void open(ServerPlayer player, ShrineSite site) {
+        if (!ShrineInteractions.withinMenuRange(player, site)) return;
 		if (!KarmaGameRules.enabled(player, KarmaGameRules.SHRINES_ENABLED)) return;
 		player.openMenu(new SimpleMenuProvider(
 			(id, inventory, ignored) -> new MonumentMenu(id, inventory, player, site, new SimpleContainer(SIZE)),
@@ -40,7 +41,7 @@ public final class MonumentMenu extends KarmaMenu {
 
 	@Override
 	public void clicked(int slotId, int button, ContainerInput input, Player clicker) {
-		if (clicker != player) return;
+		if (clicker != player || !stillValid(clicker)) return;
 		if (slotId >= 0 && slotId < SIZE) {
 			if (input == ContainerInput.PICKUP && button == 0) {
 				switch (slotId) {
@@ -63,6 +64,11 @@ public final class MonumentMenu extends KarmaMenu {
 		}
 		super.clicked(slotId, button, input, clicker);
 	}
+
+    @Override
+    public boolean stillValid(Player other) {
+        return other == player && ShrineInteractions.withinMenuRange(player, site);
+    }
 
 	@Override
 	public void removed(Player closingPlayer) {
@@ -100,7 +106,7 @@ public final class MonumentMenu extends KarmaMenu {
 		}
 		display.setItem(INFO, ShrineMenu.icon(Items.LODESTONE, "Shrine Info",
 			"Worldheart / Monument information.",
-			"Detailed info is reserved for a later pass."));
+			"Shared progression for the whole world."));
 		if (KarmaGameRules.enabled(player, KarmaGameRules.SHOP_ENABLED)) {
 			display.setItem(SHOP, ShrineMenu.icon(Items.BELL, "Shop", "Access the combined Monument shop."));
 		}

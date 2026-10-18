@@ -108,7 +108,7 @@ public final class KarmaConversionMenu extends KarmaMenu {
 			"Karma: " + KarmaService.format(KarmaService.get(player)),
 			"Reputation: " + SocialCurrencyService.getReputation(player),
 			"Infamy: " + KarmaService.getInfamyPoints(player),
-			"Physical Tokens: " + SocialTokenService.count(player),
+			"Physical Influence: " + SocialTokenService.count(player),
 			"Origin: " + SocialTokenService.usableOrigin(player).displayName()));
 		display.setItem(BACK, icon(Items.ARROW, "Back"));
 		display.setItem(SOURCE, icon(source == SocialCurrencyService.RedemptionTarget.REPUTATION ? Items.EMERALD : Items.WITHER_SKELETON_SKULL,
@@ -116,7 +116,7 @@ public final class KarmaConversionMenu extends KarmaMenu {
 		display.setItem(REDEEM, icon(Items.CLOCK, redeemMode ? "Mode: Tokens -> Currency" : "Mode: Currency -> Tokens", "Click to switch mode."));
 		selected = clamp(selected);
 		display.setItem(ACTION, icon(redeemMode ? Items.ECHO_SHARD : source == SocialCurrencyService.RedemptionTarget.REPUTATION ? Items.EMERALD : Items.WITHER_SKELETON_SKULL,
-			pendingConfirmation != null ? "CONFIRM conversion" : redeemMode ? "Redeem" : "Materialize", "Amount: " + selected,
+			pendingConfirmation != null ? "Confirm conversion" : redeemMode ? "Redeem" : "Materialize", "Amount: " + selected,
 			redeemMode ? "Output: " + (selected * (SocialCurrencyService.getStance(player) == SocialCurrencyService.Stance.NEUTRAL ? SocialCurrencyService.neutralRedemptionPercent() : SocialCurrencyService.alignedRedemptionPercent()) / 100) : "Creates about " + (selected * SocialCurrencyService.materializationPercent() / 100) + " " + (source == SocialCurrencyService.RedemptionTarget.REPUTATION ? "Light" : "Dark") + " Influence."));
 		display.setItem(18, icon(Items.GOLD_BLOCK, "-100"));
         display.setItem(19, icon(Items.GOLD_INGOT, "-10"));
@@ -128,8 +128,8 @@ public final class KarmaConversionMenu extends KarmaMenu {
 	}
 
 	private static ItemStack icon(net.minecraft.world.item.Item item, String name, String... lore) {
-		ItemStack stack = new ItemStack(item); stack.set(DataComponents.CUSTOM_NAME, Component.literal(name));
-		if (lore.length > 0) stack.set(DataComponents.LORE, new ItemLore(java.util.Arrays.stream(lore).<Component>map(Component::literal).toList()));
+		ItemStack stack = new ItemStack(item); stack.set(DataComponents.CUSTOM_NAME, KicUiText.title(name));
+		if (lore.length > 0) stack.set(DataComponents.LORE, new ItemLore(KicUiText.lore(lore)));
 		return stack;
 	}
 }

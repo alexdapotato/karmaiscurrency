@@ -482,7 +482,7 @@ public final class KarmaStatusMenu extends KarmaMenu {
 				if (!player.addItem(stack)) player.drop(stack, false);
 			} else if (SocialTokenService.isToken(stack)) {
 				KicHistoryService.recordInfluence(player, -stack.getCount(), "Influence dematerialization");
-                player.sendSystemMessage(Component.literal("Influence -" + stack.getCount() + " (dematerialization)"));
+                KicMessages.change(player, "Physical Influence", -stack.getCount(), "Shrine offering");
 			}
 		}
 
@@ -501,7 +501,7 @@ public final class KarmaStatusMenu extends KarmaMenu {
 				yield "Neutral Influence";
 			}
 		};
-		player.sendSystemMessage(Component.literal(KicFlavorText.offering(stance, net, target)));
+		if (stance == SocialCurrencyService.Stance.NEUTRAL) KicMessages.change(player, "Physical Influence", net, "Shrine offering");
 		SocialCurrencyService.startDematerializationCooldown(player);
         KicUiText.success(player);
 		selected = 0;
@@ -640,7 +640,7 @@ public final class KarmaStatusMenu extends KarmaMenu {
 				int stacks = CurseBlessingService.blessingStack(player, id);
 				int minutes = CurseBlessingService.blessingMinutesRemaining(player, id);
 				display.setItem(ACTIVE_BLESSING_SLOTS[i], ShrineMenu.icon(blessing.displayItem(),
-					blessing.classification().displayName() + "\n" + blessing.name() + " Sigil", "Blessing Sigil",
+					blessing.name(), blessing.classification().displayName() + " Blessing Sigil",
 					(stacks>0?"Active Sigil":"Inactive: alignment/commitment slot limit"), "Equipped stacks: " + CurseBlessingService.storedStack(player, true, id) + "/" + blessing.maxStacks(), KicUiText.durationSeconds(minutes * 60L) + " remaining"));
 			} else {
 				display.setItem(ACTIVE_BLESSING_SLOTS[i], ShrineMenu.icon(Items.STAINED_GLASS_PANE.gray(), "Empty Blessing Sigil", "No active Blessing Sigil."));
@@ -664,14 +664,14 @@ public final class KarmaStatusMenu extends KarmaMenu {
 		if (!CurseBlessingService.canUseLightShrine(player)) {
 			display.setItem(13, ShrineMenu.icon(Items.BARRIER, "Blessings Unavailable",
 				"The Devil prevents access to Light Shrine blessings.",
-				"Purification is the future neutral escape route."));
+				"This commitment prevents access."));
 			return;
 		}
 
 		display.setItem(13, ShrineMenu.icon(Items.EMERALD_BLOCK, "Blessings",
 			"Reputation: " + SocialCurrencyService.getReputation(player),
 			CurseBlessingService.slotSummary(player), CurseBlessingService.sigilDetails(player),
-			CurseBlessingService.isDevoted(player) ? "Devotion grants one Blessing slot." : "Each stack also uses a shared stack slot."));
+			CurseBlessingService.isDevoted(player) ? "Devotion allows 3 Blessing types; no Curses." : "Each stack also uses a shared stack slot."));
 
 		int start = sigilPage * AVAILABLE_BLESSING_SLOTS.length;
 		int count = Math.min(AVAILABLE_BLESSING_SLOTS.length, currentBlessings().size() - start);
@@ -684,7 +684,7 @@ public final class KarmaStatusMenu extends KarmaMenu {
 			String status = active ? "ACTIVE x" + stacks + " ("
 				+ (blessing.duration() == CurseBlessingRegistry.SigilDuration.PERMANENT ? "Permanent" : minutes + "m remaining") + ")"
 				: "Click to inspect this Sigil.";
-			display.setItem(slot, ShrineMenu.icon(blessing.displayItem(), blessing.classification().displayName() + "\n" + blessing.name() + " Sigil", "Blessing Sigil",
+			display.setItem(slot, ShrineMenu.icon(blessing.displayItem(), blessing.name(), blessing.classification().displayName() + " Blessing Sigil",
 				status,
 				blessing.effectDescription(),
 				"Max stacks: " + blessing.maxStacks(),
@@ -753,12 +753,12 @@ public final class KarmaStatusMenu extends KarmaMenu {
 			"Community Influence: " + CommunityProgressionService.formatInfluence(community.pool()),
 			stage < CommunityProgressionService.MAX_STAGE
 				? "Next Stage: " + CommunityProgressionService.formatInfluence(
-					CommunityProgressionService.nextStageThreshold(stage))
+					CommunityProgressionService.get(player.level().getServer()).nextStageThreshold(stage))
 				: "Stage 5 is the cap.",
 			"Open the community World Progression screen below."));
 		display.setItem(WORLD_PROGRESSION, ShrineMenu.icon(Items.EMERALD_BLOCK, "World Progression",
 			"View community progress and submit Influence.",
-			"Light, Neutral, and Dark Influence share one pool."));
+			"Reputation and Infamy share one community pool."));
 	}
 
 	private void refreshTitles() {
@@ -766,7 +766,10 @@ public final class KarmaStatusMenu extends KarmaMenu {
 			display.setItem(13, ShrineMenu.icon(Items.BARRIER, "Titles Disabled", "Titles are disabled for this world."));
 			return;
 		}
-		display.setItem(13, ShrineMenu.icon(Items.NAME_TAG, "Recognition", QuestService.recognition(player).toArray(String[]::new)));
+		var recognition = QuestService.recognition(player);
+        display.setItem(13, ShrineMenu.icon(Items.NAME_TAG, "Earned recognition",
+            recognition.stream().filter(line -> line.startsWith("First completion:")).toArray(String[]::new)));
+        display.setItem(22, ShrineMenu.icon(Items.BEACON, "Contribution milestones", CommunityProgressionService.personalContributionSummary(player)));
 	}
 
 	private void refreshSocial() {
@@ -791,17 +794,20 @@ public final class KarmaStatusMenu extends KarmaMenu {
 			int amount = selected;
 			String origin = source == SocialCurrencyService.RedemptionTarget.REPUTATION ? "Light" : "Dark";
 			display.setItem(SOCIAL_COUNTER, ShrineMenu.icon(Items.GHAST_TEAR,
-				(pendingSocialConfirmation == null ? "Materialize " : "CONFIRM materialization: ") + amount,
-				"Click twice to confirm " + amount + " " + origin + " Influence.",
+				(pendingSocialConfirmation == null ? "Materialize " : "Confirm materialization: ") + amount,
+				"Spend: " + amount + " " + source.displayName(),
+                "Receive: " + ((long)amount * SocialCurrencyService.materializationPercent() / 100) + " Physical Influence",
+                "Remaining: " + (available - amount) + " " + source.displayName(),
+                pendingSocialConfirmation == null ? "Click to review." : "Click again to confirm.",
 				"Balance: " + available + " " + source.displayName()));
 			display.getItem(SOCIAL_COUNTER).set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
 		} else {
 			display.setItem(SOCIAL_COUNTER, ItemStack.EMPTY);
 		}
 
-		display.setItem(SOCIAL_DECREASE_100, ShrineMenu.icon(Items.GOLD_BLOCK, "-100", "Adjust the next replenishment batch."));
-		display.setItem(SOCIAL_DECREASE_10, ShrineMenu.icon(Items.GOLD_INGOT, "-10", "Adjust the next replenishment batch."));
-		display.setItem(SOCIAL_DECREASE_1, ShrineMenu.icon(Items.GOLD_NUGGET, "-1", "Adjust the next replenishment batch."));
+		display.setItem(SOCIAL_DECREASE_100, ShrineMenu.icon(Items.GOLD_BLOCK, "-100", "Decrease the selected amount."));
+		display.setItem(SOCIAL_DECREASE_10, ShrineMenu.icon(Items.GOLD_INGOT, "-10", "Decrease the selected amount."));
+		display.setItem(SOCIAL_DECREASE_1, ShrineMenu.icon(Items.GOLD_NUGGET, "-1", "Decrease the selected amount."));
 		display.setItem(SOCIAL_INCREASE_1, ShrineMenu.icon(Items.GOLD_NUGGET, "+1", "Increase selection by 1."));
 		display.setItem(SOCIAL_INCREASE_10, ShrineMenu.icon(Items.GOLD_INGOT, "+10", "Increase selection by 10."));
 		display.setItem(SOCIAL_INCREASE_100, ShrineMenu.icon(Items.GOLD_BLOCK, "+100", "Increase selection by 100."));
@@ -813,11 +819,11 @@ public final class KarmaStatusMenu extends KarmaMenu {
 			"Balance: " + targetSocialBalance(), "Maximum batch: " + MAX_MATERIALIZATION_AMOUNT));
 
 		display.setItem(SOCIAL_MODE, ShrineMenu.icon(Items.SHROOMLIGHT, "Materialize",
-			"Social Currency → Influence Tokens.",
+			"Reputation / Infamy → Physical Influence.",
 			"Click the centre preview, then click again to confirm."));
 		display.setItem(SOCIAL_ALL, ShrineMenu.icon(Items.BARRIER,
 			selected > 0 ? "Clear All" : "Convert All",
-			selected > 0 ? "Clear the materialization slot" : "Stage all available " + source.displayName() + ".",
+			selected > 0 ? "Clear the selected amount" : "Stage all available " + source.displayName() + ".",
 			"Offering payout: " + KicUiText.target(player) + " (uses saved preference while Neutral)."));
 		display.setItem(SOCIAL_ACTION, ShrineMenu.icon(Items.STAINED_GLASS_PANE.gray(), " "));
 	}
@@ -854,7 +860,7 @@ public final class KarmaStatusMenu extends KarmaMenu {
 			ShrineConfig.current().socialDematerializationCooldownSeconds == 0 ? "No cooldown configured."
 				: "Cooldown: " + KicUiText.durationSeconds(ShrineConfig.current().socialDematerializationCooldownSeconds)));
 		display.setItem(SOCIAL_ACTION, ShrineMenu.icon(Items.NETHER_STAR,
-			!SocialCurrencyService.canDematerialize(player) ? "Dematerialization on cooldown" : gross >= SocialCurrencyService.OFFERING_MINIMUM_GROSS ? (pendingSocialConfirmation == null ? "Offer Items" : "CONFIRM dematerialization") : "Need More Value",
+			!SocialCurrencyService.canDematerialize(player) ? "Dematerialization on cooldown" : gross >= SocialCurrencyService.OFFERING_MINIMUM_GROSS ? (pendingSocialConfirmation == null ? "Offer Items" : "Confirm offering") : "Need More Value",
 			"Gross value: " + gross,
 			"Tax: " + SocialCurrencyService.OFFERING_TAX_PERCENT + "% (rounded down payout)",
 			KicUiText.conversion(player, dematerializationExactValue()),
