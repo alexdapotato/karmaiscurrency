@@ -71,7 +71,7 @@ public final class QuestService {
         ABUNDANCE("abundance", Type.TRIAL, "Trial of Abundance", Items.CHEST,
             "Submit and consume a bulk crop, resource, log or fishing bundle.", "Configurable Karma and Reputation based on objective difficulty."),
         MERCY("mercy", Type.TRIAL, "Trial of Mercy", Items.POPPY,
-            "Cure 1 Zombie Villager before the timer expires.", "Configurable Mercy Karma and Reputation rewards."),
+            "Cure 1-4 Zombie Villagers. Stage I only; no timer.", "Configurable Mercy Karma and Reputation rewards."),
         COURAGE("courage", Type.TRIAL, "Trial of Courage", Items.SHIELD,
             "Complete the selected server-tracked exploration objective.", "Standard configurable Trial reward based on objective difficulty."),
         HUNT("hunt", Type.TRIAL, "The Hunt", Items.COMPASS,
@@ -81,18 +81,20 @@ public final class QuestService {
         SURVIVOR("survivor", Type.TRIAL, "Endurance", Items.CLOCK,
             "Explore and survive during a 12-hour window.", "Movement-gated online time and eligible hostile kills; Untouchable bonus."),
         BLOOD_PRICE("blood_price", Type.CONTRACT, "Blood Price", Items.IRON_SWORD,
-            "Make valid kills during the 30-minute active timer.",
-            "Configured Infamy per valid kill during the 30-minute timer.", 3),
+            "Make valid kills during the stage-dependent active timer.",
+            "Configured Infamy per valid kill during the active timer.", 3),
         EXECUTIONER("executioner", Type.CONTRACT, "The Executioner", Items.NETHERITE_AXE,
             "Kill the selected target.", "Standard configurable Contract reward based on objective difficulty."),
         COLLECTOR("collector", Type.CONTRACT, "The Collector", Items.HOPPER,
             "Submit and consume the selected themed item bundle.", "Standard configurable Contract reward based on objective difficulty."),
         WARDEN("warden", Type.CONTRACT, "The Warden", Items.SCULK_SHRIEKER,
             "Kill a Warden.", "High-difficulty Warden contract reward is configurable."),
-        PILGRIMAGE("pilgrimage", Type.TRIAL, "Pilgrimage", Items.COMPASS, "Visit three shrines and return to the first.", "24–64 Reputation and 15 Karma."),
+        PILGRIMAGE("pilgrimage", Type.TRIAL, "Pilgrimage", Items.COMPASS, "Submit compasses bound to different valid shrines.", "24-64 Reputation and 15 Karma."),
         CHALLENGER("challenger", Type.TRIAL, "Challenger", Items.TRIAL_KEY, "Complete 4–18 distinct Trial Spawners.", "8 social currency and 2 signed Karma per spawner, plus group bonus."),
         DUEL("duel", Type.CONTRACT, "Duel", Items.IRON_SWORD,
-            "Explicitly agree to a designated player duel.", "Only the winner receives the configured Duel reward.");
+            "Explicitly agree to a designated player duel.", "Only the winner receives the configured Duel reward."),
+        HIDDEN_BLUE("hidden_in_the_blue", Type.TRIAL, "Hidden in the Blue", Items.FISHING_ROD,
+            "Fish in ocean open water for a rare enchanted book. An enchanted golden apple is a failed outcome.", "One special catch per cycle; successful books trigger a three-cycle cooldown.");
 
         private final String id;
         private final Type type;
@@ -175,12 +177,14 @@ public final class QuestService {
         KicRotationState rotation = server == null ? null : KicRotationState.get(server);
         List<String> stored = rotation == null ? List.of() : type == Type.TRIAL
             ? rotation.trialQuestIdsForCycle(cycle) : rotation.contractQuestIdsForCycle(cycle);
-        List<QuestId> restored = fromQuestIds(stored, type);
-        if (restored.size() == countFor(type)) return restored;
+        int worldStage = CommunityProgressionService.stage(player);
+        List<QuestId> restored = fromQuestIds(stored, type).stream().filter(q -> QuestExpansion.stageAllows(q,worldStage)).toList();
+        if (restored.size() == countFor(type)) return withRareQuest(restored, worldStage, cycle);
 
         List<QuestId> candidates = new ArrayList<>();
         for (QuestId quest : QuestId.values()) {
-            if (QuestRevamp.inPool(quest, type) && quest != QuestId.HUNT && quest != QuestId.DUEL) candidates.add(quest);
+            if (QuestRevamp.inPool(quest, type) && quest != QuestId.HUNT && quest != QuestId.DUEL && quest != QuestId.HIDDEN_BLUE
+                    && QuestExpansion.stageAllows(quest,worldStage)) candidates.add(quest);
         }
         String scope = type == Type.TRIAL ? "quests.trials" : "quests.contracts";
         int count = countFor(type);
@@ -209,14 +213,20 @@ public final class QuestService {
             if (type == Type.TRIAL) rotation.recordTrialQuestRotation(cycle, ids);
             else rotation.recordContractQuestRotation(cycle, ids);
         }
-        return List.copyOf(selected);
+        return withRareQuest(selected,worldStage,cycle);
+    }
+
+    private static List<QuestId> withRareQuest(List<QuestId> regular, int stage, long cycle) {
+        List<QuestId> result = new ArrayList<>(regular);
+        if(stage >= 2 && QuestExpansionRules.blueAppears(cycle)) result.add(QuestId.HIDDEN_BLUE);
+        return List.copyOf(result);
     }
 
     private static List<QuestId> fromQuestIds(List<String> ids, Type type) {
         List<QuestId> result = new ArrayList<>();
         for (String id : ids) {
             QuestId quest = QuestId.byId(id);
-            if (quest != null && QuestRevamp.inPool(quest, type) && quest != QuestId.HUNT && quest != QuestId.DUEL
+            if (quest != null && QuestRevamp.inPool(quest, type) && quest != QuestId.HUNT && quest != QuestId.DUEL && quest != QuestId.HIDDEN_BLUE
                     && !result.contains(quest)) result.add(quest);
         }
         return List.copyOf(result);
@@ -276,6 +286,7 @@ public final class QuestService {
 
     public static boolean canAccept(ServerPlayer player, QuestId quest) {
         if (quest == null || quest == QuestId.DUEL) return false;
+        if (!QuestExpansion.stageAllows(quest,CommunityProgressionService.stage(player))) return false;
         if (quest == QuestId.HUNT) return canBecomeHunted(player) || canJoinHunt(player);
         if (quest != QuestId.DUEL && !KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)) return false;
         if (quest == QuestId.DUEL && !KarmaGameRules.enabled(player, KarmaGameRules.DUELS_ENABLED)) return false;
@@ -390,6 +401,7 @@ public final class QuestService {
     }
 
     public static boolean accept(ServerPlayer player, QuestId quest) {
+        QuestExpansion.migrate(player);
         if (quest == QuestId.DUEL && !KarmaGameRules.enabled(player, KarmaGameRules.DUELS_ENABLED)) {
             player.sendSystemMessage(Component.literal("Duels are currently disabled."));
             return false;
@@ -411,9 +423,7 @@ public final class QuestService {
             return false;
         }
 
-        if (quest == QuestId.MERCY) {
-            if (!LightShrineService.startQuestTrial(player, LightShrineService.TRIAL_MERCY)) return false;
-        }
+
         KarmaPlayerState.set(player, OBJECTIVE_INDEX_PREFIX + quest.id(), selectedObjectiveIndex(player, quest) + 1L);
         KarmaPlayerState.set(player, BONUS_PREFIX + quest.id(), selectedBonus(player, quest) + 1L);
         KarmaPlayerState.clear(player, BONUS_FAILED_PREFIX + quest.id());
@@ -486,6 +496,8 @@ public final class QuestService {
                 quest, CommunityProgressionService.stage(player)).isEmpty()) {
             return "No Offering objective meets the configured item values and 32-value minimum.";
         }
+        if (!QuestExpansion.stageAllows(quest,CommunityProgressionService.stage(player))) return quest == QuestId.MERCY ? "Mercy is available only at world stage I." : "Hidden in the Blue unlocks at world stage II.";
+        if (quest == QuestId.HIDDEN_BLUE && !QuestExpansion.blueAvailable(player)) return "Hidden in the Blue: this cycle’s attempt is spent or its three-cycle cooldown is active.";
         String alignmentBlock = alignmentBlockReason(player, quest);
         if (!alignmentBlock.isBlank()) return alignmentBlock;
         if (activeCount(player) >= MAX_ACTIVE_QUESTS) return activeLimitMessage();
@@ -539,7 +551,7 @@ public final class QuestService {
         }
         if (quest == QuestId.BLOOD_PRICE) {
             long started = KarmaPlayerState.get(player, STARTED_AT);
-            long remaining = Math.max(0L, BLOOD_PRICE_DURATION_MILLIS - (System.currentTimeMillis() - started));
+            long remaining = Math.max(0L, bloodPriceDuration(player) - (System.currentTimeMillis() - started));
             return "Valid hostile kills: " + KarmaPlayerState.get(player, progressKey(quest))
                 + " | Time remaining: " + formatDuration(remaining);
         }
@@ -553,12 +565,7 @@ public final class QuestService {
                 ? "Expedition objective secured. Return alive within 8 blocks of a shrine core with your item. Items are kept."
                 : objective.description() + " | Expedition objective not yet secured.";
         }
-        if (quest == QuestId.MERCY) {
-            return LightShrineService.hasActiveMercyTrial(player)
-                ? "Cure 1 Zombie Villager. Time remaining: "
-                    + formatDuration(LightShrineService.trialRemainingMillis(player))
-                : "Cure 1 Zombie Villager: apply Weakness, then use a Golden Apple and wait for conversion.";
-        }
+        if (quest == QuestId.MERCY) return QuestExpansion.status(player,quest);
         return objective.description();
     }
 
@@ -652,7 +659,7 @@ public final class QuestService {
     }
 
     private static String itemHandlingDescription(QuestId quest) {
-        return QuestRevamp.submission(quest)?" Already-owned items count. Submit explicitly; confirmation consumes the full bundle.":"";
+        return QuestRevamp.usesSubmission(quest)?" Already-owned items count. Submit explicitly; confirmation consumes the full bundle.":"";
     }
 
     public static String objectiveDescription(QuestId quest) {
@@ -669,7 +676,7 @@ public final class QuestService {
 
     public static String rewardDescription(QuestId quest) {
         if (quest == null) return "No reward is registered.";
-        if (quest == QuestId.MERCY) return LightShrineService.mercyQuestRewardDescription();
+        if (quest == QuestId.MERCY) return "1-2 cures: +15 Karma; 3-4: +30 Karma. Reputation: 20/35/50/65.";
         if (quest == QuestId.HUNT) {
             HuntConfig config = HuntConfig.current();
             return "Existing Hunt rules: Hunters receive " + config.hunterRewardInfamy
@@ -689,6 +696,7 @@ public final class QuestService {
         }
         QuestObjectiveCatalog.Objective objective = player == null
             ? objectiveForIndex(quest, 0) : activeObjective(player, quest);
+        if (QuestExpansion.handles(quest)) return QuestExpansion.preview(quest,objective);
         if (QuestRevamp.submission(quest)||quest==QuestId.SURVIVOR||quest==QuestId.CHALLENGER||quest==QuestId.PILGRIMAGE) {
             String preview=QuestRevamp.preview(player,quest,objective);
             if(quest!=QuestId.SURVIVOR && selectedBonus(player,quest)>0) {
@@ -703,7 +711,7 @@ public final class QuestService {
         if (quest == QuestId.MERCY) {
             base = LightShrineService.mercyQuestRewardDescription();
         } else if (quest == QuestId.BLOOD_PRICE) {
-            base = "Dynamic: +" + config.bloodPriceInfamyPerKill + " Infamy per valid kill during the 30-minute timer (maximum " + config.bloodPriceMaxInfamy + " Infamy before bonuses).";
+            base = "Dynamic: +" + config.bloodPriceInfamyPerKill + " Infamy per valid kill during the active timer (maximum " + config.bloodPriceMaxInfamy + " Infamy before bonuses).";
         } else if (quest == QuestId.WARDEN) {
             base = signedReward(config.wardenKarma, "Karma") + ", +" + config.wardenInfamy + " Infamy.";
         } else if (quest == QuestId.OFFERING) {
@@ -816,7 +824,7 @@ public final class QuestService {
         if (player == null || quest == null || quest == QuestId.HUNT || quest == QuestId.DUEL) return 0L;
         if (!KarmaGameRules.enabled(player, KarmaGameRules.BONUS_OBJECTIVES_ENABLED)) return 0L;
         if (quest == QuestId.SURVIVOR) return 1L;
-        if (QuestRevamp.submission(quest) || quest==QuestId.MERCY) return 0L;
+        if (QuestRevamp.submission(quest) || quest==QuestId.MERCY || quest==QuestId.HIDDEN_BLUE || quest==QuestId.PILGRIMAGE) return 0L;
         String key = BONUS_PREFIX + quest.id();
         long stored = KarmaPlayerState.get(player, key);
         if (stored > 0L) return stored - 1L;
@@ -890,11 +898,18 @@ public final class QuestService {
         return objective.requirements().stream().allMatch(r -> inventoryCount(player,r.item())>=r.count());
     }
 
+    public static long bloodPriceDuration(ServerPlayer player) {
+        long stored = QuestRevamp.get(player,"blood_duration");
+        if (isStoredActive(player,QuestId.BLOOD_PRICE)) return stored > 0 ? stored : BLOOD_PRICE_DURATION_MILLIS;
+        return QuestExpansionRules.bloodPriceMillis(CommunityProgressionService.stage(player));
+    }
+
     public static String durationDescription(QuestId quest) {
         if (quest == null) return "No duration is registered.";
-        if (quest == QuestId.BLOOD_PRICE) return "Active timer: 30 minutes.";
+        if (quest == QuestId.BLOOD_PRICE) return "Active timer: 30 minutes at stages 0-I; 16 minutes from stage II. Locked when accepted.";
         if (quest == QuestId.SURVIVOR) return "12 real hours; online movement earns up to 6 rewarded hours. Offline time earns nothing.";
-        if (quest == QuestId.MERCY) return "Existing Mercy Trial timer: " + LightShrineService.mercyTrialDurationMinutes() + " minutes.";
+        if (quest == QuestId.MERCY || quest == QuestId.PILGRIMAGE) return "No time limit.";
+        if (quest == QuestId.HIDDEN_BLUE) return "No timer. Catch progress survives cancellation within the cycle; resets next cycle.";
         if (quest == QuestId.HUNT) return "Existing Hunt duration: " + HuntConfig.current().durationHours + " hours.";
         return "No duration or timer has been finalized.";
     }
@@ -908,6 +923,7 @@ public final class QuestService {
     }
 
     public static String cooldownRuleDescription(QuestId quest) {
+        if(quest==QuestId.HIDDEN_BLUE)return "One special outcome per cycle. Success blocks the next 3 full cycles; failure only spends this cycle. Cancelling preserves this cycle’s catch progress.";
         if(quest==QuestId.HUNT)return "Hunt participation uses its own cooldowns.";
         if(quest==QuestId.SURVIVOR)return "One start per 12 hours, including cancelled runs.";
         return QuestRevamp.limit(quest)+" completions per individual objective per cycle. Cancelling spends no completion and does not reroll.";
@@ -922,7 +938,7 @@ public final class QuestService {
     }
 
     public static long questCooldownCyclesRemaining(ServerPlayer player, QuestId quest) {
-        return 0L;
+        return quest == QuestId.HIDDEN_BLUE ? Math.min(3L,Math.max(0L,QuestRevamp.get(player,"blue_next_cycle")-KicCycle.currentCycleId())) : 0L;
     }
 
     public static long questCooldownMillisRemaining(ServerPlayer player, QuestId quest) {
@@ -998,12 +1014,12 @@ public final class QuestService {
 
     private static boolean completionRequirementsMet(ServerPlayer player, QuestId quest) {
         if (player == null || quest == null || activeQuest(player) != quest || !QuestRevamp.eligible(player,quest)) return false;
-        if (QuestRevamp.submission(quest)||quest==QuestId.SURVIVOR||quest==QuestId.CHALLENGER||quest==QuestId.PILGRIMAGE) return QuestRevamp.ready(player,quest);
+        if (QuestExpansion.handles(quest) || QuestRevamp.submission(quest)||quest==QuestId.SURVIVOR||quest==QuestId.CHALLENGER) return QuestRevamp.ready(player,quest);
         if (quest == QuestId.MERCY) return KarmaPlayerState.get(player, "quest_mercy_completion_ready") == 1L;
         if (quest == QuestId.DUEL) return KarmaPlayerState.get(player, DUEL_WON) == 1L;
         if (quest == QuestId.BLOOD_PRICE) {
             long started = KarmaPlayerState.get(player, STARTED_AT);
-            return started > 0L && System.currentTimeMillis() - started >= BLOOD_PRICE_DURATION_MILLIS;
+            return started > 0L && System.currentTimeMillis() - started >= bloodPriceDuration(player);
         }
         QuestObjectiveCatalog.Objective objective = activeObjective(player, quest);
         if (quest == QuestId.COURAGE) {
@@ -1072,7 +1088,7 @@ public final class QuestService {
         if (reason == EndReason.COMPLETED) {
             if (!QuestRevamp.reward(player,quest,objectiveForIndex(quest,objectiveIndex)))
                 applyCompletionReward(player, quest, objectiveIndex, bonus, bonusCompleted, dynamicReward, progress);
-            else if (quest!=QuestId.SURVIVOR && bonusCompleted) applyBonusReward(player,quest,bonus);
+            else if (!QuestExpansion.handles(quest) && quest!=QuestId.SURVIVOR && bonusCompleted) applyBonusReward(player,quest,bonus);
             recognizeCompletion(player, quest);
             KicUiText.success(player);
         }
@@ -1128,7 +1144,7 @@ public final class QuestService {
             return;
         }
         long started = KarmaPlayerState.get(killer, STARTED_AT);
-        if (started <= 0L || System.currentTimeMillis() - started >= BLOOD_PRICE_DURATION_MILLIS) {
+        if (started <= 0L || System.currentTimeMillis() - started >= bloodPriceDuration(killer)) {
             long kills = KarmaPlayerState.get(killer, progressKey(QuestId.BLOOD_PRICE));
             long reward = QuestConfig.current().bloodPriceReward(kills);
             completeWithDynamicReward(killer, QuestId.BLOOD_PRICE, reward);
@@ -1307,16 +1323,16 @@ public final class QuestService {
         if(server.getTickCount()%200==0)QuestRevamp.pruneSamples(server.getPlayerList().getPlayers());
         for(ServerPlayer player:server.getPlayerList().getPlayers()) {
             QuestRevamp.migrate(player);
+            QuestExpansion.migrate(player);
             QuestId quest=activeQuest(player);
             if(quest==null)continue;
             if(quest==QuestId.DUEL){cancelDuel(player);continue;}
             enforceBonusEquipment(player,quest);
             boolean eligible=questFeatureEnabled(player,quest)&&QuestRevamp.eligible(player,quest);
             QuestRevamp.tick(player,quest,eligible);
-            if(quest==QuestId.MERCY) LightShrineService.trial(player); // expiration continues while paused
             if(!eligible)continue;
             if(quest==QuestId.SURVIVOR && QuestRevamp.expired(player)) complete(player,quest);
-            else if(quest==QuestId.BLOOD_PRICE && System.currentTimeMillis()-KarmaPlayerState.get(player,STARTED_AT)>=BLOOD_PRICE_DURATION_MILLIS)
+            else if(quest==QuestId.BLOOD_PRICE && System.currentTimeMillis()-KarmaPlayerState.get(player,STARTED_AT)>=bloodPriceDuration(player))
                 completeWithDynamicReward(player,quest,QuestConfig.current().bloodPriceReward(KarmaPlayerState.get(player,progressKey(quest))));
             else if(quest==QuestId.COURAGE)tickCourage(player);
         }
@@ -1414,6 +1430,7 @@ public final class QuestService {
             case DUEL -> 11;
             case PILGRIMAGE -> 12;
             case CHALLENGER -> 13;
+            case HIDDEN_BLUE -> 14;
         };
     }
 
@@ -1432,6 +1449,7 @@ public final class QuestService {
             case 11 -> QuestId.DUEL;
             case 12 -> QuestId.PILGRIMAGE;
             case 13 -> QuestId.CHALLENGER;
+            case 14 -> QuestId.HIDDEN_BLUE;
             default -> null;
         };
     }

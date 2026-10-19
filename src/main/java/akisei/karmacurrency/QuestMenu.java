@@ -26,10 +26,10 @@ public final class QuestMenu extends KarmaMenu {
     private static final int ACTIVE_PROGRESS = 19; // R3C2
     private static final int COOLDOWN_STATUS = 22;
     private static final int TRIAL_LABEL = 29; // R4C3
-    private static final int[] TRIAL_SLOTS = {30, 31, 32}; // R4C4-C6
+    private static final int[] TRIAL_SLOTS = {30, 31, 32, 34}; // Three regular quests plus the rare fishing quest
     private static final int HUNT_SLOT = 33; // R4C7, independent of the rotating trial pool
     private static final int CONTRACT_LABEL = 38; // R5C3
-    private static final int[] CONTRACT_SLOTS = {39, 40, 41}; // R5C4-C6
+    private static final int[] CONTRACT_SLOTS = {39, 40, 41, 43}; // Three regular quests plus the rare fishing quest
     private static final int DUEL_SLOT = 42; // Independent from rotating quest pools
     private static final int CANCEL_ACTIVE = 11;
     private static final int DUEL_INVITATION = 12;
@@ -94,10 +94,10 @@ public final class QuestMenu extends KarmaMenu {
             onBack.run();
             return;
         }
-        if (slotId == ACTIVE_PROGRESS && QuestRevamp.submission(QuestService.activeQuest(player))) {
+        if (slotId == ACTIVE_PROGRESS && QuestRevamp.usesSubmission(QuestService.activeQuest(player))) {
             QuestRevamp.submit(player,false);refresh();return;
         }
-        if (slotId == 14 && QuestRevamp.submission(QuestService.activeQuest(player))) {
+        if (slotId == 14 && QuestRevamp.usesSubmission(QuestService.activeQuest(player))) {
             QuestRevamp.submit(player,true);refresh();return;
         }
         if (slotId == CANCEL_ACTIVE) {
@@ -200,8 +200,8 @@ public final class QuestMenu extends KarmaMenu {
             String progress = QuestService.status(player, active);
             display.setItem(ACTIVE_QUEST, ShrineMenu.icon(active.icon(), active.displayName(),
                 "Active state: 1/1", progress));
-            display.setItem(ACTIVE_PROGRESS, ShrineMenu.icon(Items.PAPER, QuestRevamp.submission(active)?"Review Submission":"Progress / Timer", progress));
-            if(QuestRevamp.submission(active) && QuestRevamp.get(player,"confirm_until")>=System.currentTimeMillis())
+            display.setItem(ACTIVE_PROGRESS, ShrineMenu.icon(Items.PAPER, QuestRevamp.usesSubmission(active)?"Review Submission":"Progress / Timer", progress));
+            if(QuestRevamp.usesSubmission(active) && QuestRevamp.get(player,"confirm_until")>=System.currentTimeMillis())
                 display.setItem(14,ShrineMenu.icon(Items.EMERALD,"Confirm Submission — consumes items",QuestService.objectiveDescription(player,active),QuestService.rewardDescription(player,active)));
             display.setItem(CANCEL_ACTIVE, ShrineMenu.icon(Items.BARRIER, "Cancel Active Quest",
                 "Ends the quest without a reward.", "No completion spent; same objective remains available."));
@@ -211,14 +211,14 @@ public final class QuestMenu extends KarmaMenu {
 
         if (showTrials()) {
             display.setItem(TRIAL_LABEL, ShrineMenu.icon(Items.EMERALD, "Trials",
-                "Three Trials are available this cycle.",
+                "Three regular Trials; a rare fishing quest can appear alongside them.",
                 SocialCurrencyService.getStance(player) == SocialCurrencyService.Stance.DARK
                     ? "Normal Trials are unavailable for Dark Aligned players; Hunt is role-based." : ""));
             refreshPool(QuestService.Type.TRIAL, QuestService.currentTrials(player));
         }
         if (showContracts()) {
             display.setItem(CONTRACT_LABEL, ShrineMenu.icon(Items.IRON_SWORD, "Contracts",
-                "Three Contracts are available this cycle.",
+                "Three regular Contracts; a rare fishing quest can appear alongside them.",
                 SocialCurrencyService.getStance(player) == SocialCurrencyService.Stance.LIGHT
                     ? "Contracts are unavailable for Light Aligned players." : ""));
             refreshPool(QuestService.Type.CONTRACT, QuestService.currentContracts(player));

@@ -51,10 +51,12 @@ public final class QuestDebugCommands {
             .then(Commands.literal("progress").then(Commands.argument("player",EntityArgument.player()).then(Commands.argument("amount",IntegerArgumentType.integer(0,1000000)).executes(c->{
                 ServerPlayer p=EntityArgument.getPlayer(c,"player");var q=QuestService.activeQuest(p);if(q==null)return fail(c.getSource(),"This player has no active quest.");
                 int n=IntegerArgumentType.getInteger(c,"amount");
-                if(q==QuestService.QuestId.SURVIVOR)QuestRevamp.put(p,"rewarded_ticks",Math.min(432000L,n*1200L));
+                if(q==QuestService.QuestId.MERCY)QuestRevamp.put(p,"mercy_cures",Math.min(4,n));
+                else if(q==QuestService.QuestId.HIDDEN_BLUE){QuestRevamp.put(p,"blue_catch_cycle",KicCycle.currentCycleId()+1);QuestRevamp.put(p,"blue_catches",Math.min(75,n));}
+                else if(q==QuestService.QuestId.SURVIVOR)QuestRevamp.put(p,"rewarded_ticks",Math.min(432000L,n*1200L));
                 else if(q==QuestService.QuestId.CHALLENGER)QuestRevamp.put(p,"encounters",Math.min(QuestService.activeObjective(p,q).targetCount(),n));
                 else if(QuestService.activeObjective(p,q).kind()==QuestObjectiveCatalog.Kind.KILL||q==QuestService.QuestId.BLOOD_PRICE)KarmaPlayerState.set(p,"quest_progress_"+q.id(),n);
-                else return fail(c.getSource(),"Progress overrides support kill counts, Challenger spawners, and Endurance minutes only.");
+                else return fail(c.getSource(),"Progress overrides support kills, Challenger spawners, Endurance minutes, Mercy cures and fishing catches.");
                 QuestRevamp.put(p,"debug_hold",1);audit(c.getSource(),"progress "+n,p);
                 return tell(c.getSource(),"Progress set; automatic payout held. Use /quest payout <player> to explicitly claim, or cancel to discard.");
             }))))
@@ -64,6 +66,12 @@ public final class QuestDebugCommands {
                 else if(q==QuestService.QuestId.BLOOD_PRICE)KarmaPlayerState.set(p,"quest_started_at",System.currentTimeMillis()-QuestService.BLOOD_PRICE_DURATION_MILLIS);
                 else return fail(c.getSource(),"Expire supports Endurance and Blood Price.");
                 QuestRevamp.put(p,"debug_hold",1);audit(c.getSource(),"expire",p);return tell(c.getSource(),"Timer expired; payout held until the explicit payout command.");
+            })))
+            .then(Commands.literal("resume").then(Commands.argument("player",EntityArgument.player()).executes(c->{
+                ServerPlayer p=EntityArgument.getPlayer(c,"player");
+                if(QuestService.activeQuest(p)==null)return fail(c.getSource(),"This player has no active quest.");
+                QuestRevamp.put(p,"debug_hold",0);audit(c.getSource(),"resume",p);
+                return tell(c.getSource(),"Debug payout hold removed; normal quest tracking and completion resumed.");
             })))
             .then(Commands.literal("payout").then(Commands.argument("player",EntityArgument.player()).executes(c->{
                 ServerPlayer p=EntityArgument.getPlayer(c,"player");var q=QuestService.activeQuest(p);if(q==null)return fail(c.getSource(),"This player has no active quest.");
@@ -75,6 +83,7 @@ public final class QuestDebugCommands {
                 for(var q:QuestService.QuestId.values())for(var o:QuestObjectiveCatalog.objectives(q))if(QuestRevamp.identity(q,o).equals(id)){
                     QuestRevamp.put(p,"cycle_"+id,0);QuestRevamp.put(p,"count_"+id,0);
                     if(q==QuestService.QuestId.SURVIVOR)QuestRevamp.put(p,"endurance_next",0);
+                    if(q==QuestService.QuestId.HIDDEN_BLUE){QuestRevamp.put(p,"blue_attempt_cycle",0);QuestRevamp.put(p,"blue_next_cycle",0);}
                     audit(c.getSource(),"reset "+id,p);return tell(c.getSource(),"Reset only "+id+". No currency changed.");
                 }
                 return fail(c.getSource(),"Unknown objective identity. Use /quest limits <player>.");

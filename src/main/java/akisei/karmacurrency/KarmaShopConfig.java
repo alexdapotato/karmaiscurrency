@@ -196,9 +196,23 @@ public final class KarmaShopConfig {
 	}
 
     static List<String> migratePrices(List<String> lines) {
-        if (lines.contains("# kic.shopBalanceVersion=5")) return lines;
+        if (lines.contains("# kic.shopBalanceVersion=5")) return migrateBookStage(lines);
         List<String> previous = lines.contains("# kic.shopBalanceVersion=4") ? lines : balanceV4(migrateBalanceV3(lines));
-        return balanceV5(previous);
+        return migrateBookStage(balanceV5(previous));
+    }
+
+    static List<String> migrateBookStage(List<String> lines) {
+        if (lines.contains("# kic.overlevelShopStage=4")) return lines;
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        shopSections(java.util.Arrays.asList(defaultText().split("\n"))).values().forEach(fields ->
+            fields.forEach((key,value) -> { if(key.startsWith("book_") && key.endsWith(".unlockStage") && value.equals("4")) keys.add(key); }));
+        List<String> result = new ArrayList<>();
+        for (String line : lines) {
+            String trimmed=line.trim(); int equals=trimmed.indexOf('=');
+            result.add(equals>0 && keys.contains(trimmed.substring(0,equals)) ? trimmed.substring(0,equals)+"=4" : line);
+        }
+        result.add("# kic.overlevelShopStage=4");
+        return result;
     }
 
     static Map<String, Map<String, String>> shopSections(List<String> lines) {
@@ -741,7 +755,7 @@ public final class KarmaShopConfig {
             book_efficiency_6.amount=1
             book_efficiency_6.enabled=true
             book_efficiency_6.maxPurchases=1
-            book_efficiency_6.unlockStage=3
+            book_efficiency_6.unlockStage=4
             book_efficiency_6.mode=fixed_enchantment
             book_efficiency_6.variant=minecraft:efficiency
             book_efficiency_6.level=6
@@ -777,7 +791,7 @@ public final class KarmaShopConfig {
             book_fortune_4.amount=1
             book_fortune_4.enabled=true
             book_fortune_4.maxPurchases=1
-            book_fortune_4.unlockStage=3
+            book_fortune_4.unlockStage=4
             book_fortune_4.mode=fixed_enchantment
             book_fortune_4.variant=minecraft:fortune
             book_fortune_4.level=4
@@ -822,7 +836,7 @@ public final class KarmaShopConfig {
             book_protection_5.amount=1
             book_protection_5.enabled=true
             book_protection_5.maxPurchases=1
-            book_protection_5.unlockStage=3
+            book_protection_5.unlockStage=4
             book_protection_5.mode=fixed_enchantment
             book_protection_5.variant=minecraft:protection
             book_protection_5.level=5
@@ -858,7 +872,7 @@ public final class KarmaShopConfig {
             book_unbreaking_4.amount=1
             book_unbreaking_4.enabled=true
             book_unbreaking_4.maxPurchases=1
-            book_unbreaking_4.unlockStage=3
+            book_unbreaking_4.unlockStage=4
             book_unbreaking_4.mode=fixed_enchantment
             book_unbreaking_4.variant=minecraft:unbreaking
             book_unbreaking_4.level=4
@@ -912,7 +926,7 @@ public final class KarmaShopConfig {
             book_sharpness_6.amount=1
             book_sharpness_6.enabled=true
             book_sharpness_6.maxPurchases=1
-            book_sharpness_6.unlockStage=3
+            book_sharpness_6.unlockStage=4
             book_sharpness_6.mode=fixed_enchantment
             book_sharpness_6.variant=minecraft:sharpness
             book_sharpness_6.level=6
@@ -984,7 +998,7 @@ public final class KarmaShopConfig {
             book_swift_sneak_4.amount=1
             book_swift_sneak_4.enabled=true
             book_swift_sneak_4.maxPurchases=1
-            book_swift_sneak_4.unlockStage=3
+            book_swift_sneak_4.unlockStage=4
             book_swift_sneak_4.mode=fixed_enchantment
             book_swift_sneak_4.variant=minecraft:swift_sneak
             book_swift_sneak_4.level=4
@@ -1539,7 +1553,7 @@ public final class KarmaShopConfig {
             book_efficiency_6.amount=1
             book_efficiency_6.enabled=true
             book_efficiency_6.maxPurchases=1
-            book_efficiency_6.unlockStage=3
+            book_efficiency_6.unlockStage=4
             book_efficiency_6.mode=fixed_enchantment
             book_efficiency_6.variant=minecraft:efficiency
             book_efficiency_6.level=6
@@ -1575,7 +1589,7 @@ public final class KarmaShopConfig {
             book_fortune_4.amount=1
             book_fortune_4.enabled=true
             book_fortune_4.maxPurchases=1
-            book_fortune_4.unlockStage=3
+            book_fortune_4.unlockStage=4
             book_fortune_4.mode=fixed_enchantment
             book_fortune_4.variant=minecraft:fortune
             book_fortune_4.level=4
@@ -1620,7 +1634,7 @@ public final class KarmaShopConfig {
             book_protection_5.amount=1
             book_protection_5.enabled=true
             book_protection_5.maxPurchases=1
-            book_protection_5.unlockStage=3
+            book_protection_5.unlockStage=4
             book_protection_5.mode=fixed_enchantment
             book_protection_5.variant=minecraft:protection
             book_protection_5.level=5
@@ -1656,7 +1670,7 @@ public final class KarmaShopConfig {
             book_unbreaking_4.amount=1
             book_unbreaking_4.enabled=true
             book_unbreaking_4.maxPurchases=1
-            book_unbreaking_4.unlockStage=3
+            book_unbreaking_4.unlockStage=4
             book_unbreaking_4.mode=fixed_enchantment
             book_unbreaking_4.variant=minecraft:unbreaking
             book_unbreaking_4.level=4
@@ -1710,7 +1724,7 @@ public final class KarmaShopConfig {
             book_sharpness_6.amount=1
             book_sharpness_6.enabled=true
             book_sharpness_6.maxPurchases=1
-            book_sharpness_6.unlockStage=3
+            book_sharpness_6.unlockStage=4
             book_sharpness_6.mode=fixed_enchantment
             book_sharpness_6.variant=minecraft:sharpness
             book_sharpness_6.level=6
@@ -1782,7 +1796,7 @@ public final class KarmaShopConfig {
             book_soul_speed_4.amount=1
             book_soul_speed_4.enabled=true
             book_soul_speed_4.maxPurchases=1
-            book_soul_speed_4.unlockStage=3
+            book_soul_speed_4.unlockStage=4
             book_soul_speed_4.mode=fixed_enchantment
             book_soul_speed_4.variant=minecraft:soul_speed
             book_soul_speed_4.level=4

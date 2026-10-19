@@ -16,7 +16,8 @@
 		"InsomniaMixin",
 		"TrialSpawnerMixin",
 		"ItemCombinerMenuAccessor",
-		"AnvilMenuMixin"
+		"AnvilMenuMixin",
+		"FishingHookMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

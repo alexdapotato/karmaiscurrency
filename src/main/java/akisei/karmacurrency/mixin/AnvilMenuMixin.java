@@ -35,7 +35,7 @@ public abstract class AnvilMenuMixin {
         Player player = ((ItemCombinerMenuAccessor) this).karmaiscurrency$getPlayer();
         if (OverlevelBookService.isSpecialBook(menu.getSlot(1).getItem())
                 && player instanceof ServerPlayer serverPlayer
-                && CommunityProgressionService.stage(serverPlayer) < 3) {
+                && CommunityProgressionService.stage(serverPlayer) < 2) {
             menu.getSlot(2).set(ItemStack.EMPTY);
             menu.broadcastChanges();
         }
@@ -47,7 +47,7 @@ public abstract class AnvilMenuMixin {
         AbstractContainerMenu menu = (AbstractContainerMenu) (Object) this;
         if (OverlevelBookService.isSpecialBook(menu.getSlot(1).getItem())
                 && player instanceof ServerPlayer serverPlayer
-                && CommunityProgressionService.stage(serverPlayer) < 3)
+                && CommunityProgressionService.stage(serverPlayer) < 2)
             callbackInfo.setReturnValue(false);
     }
 }

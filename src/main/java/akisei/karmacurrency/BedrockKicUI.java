@@ -294,7 +294,7 @@ public final class BedrockKicUI {
                 showQuests(player, site, onBack);
             }));
         }
-        if (!active.isEmpty() && QuestRevamp.submission(active.getFirst())) {
+        if (!active.isEmpty() && QuestRevamp.usesSubmission(active.getFirst())) {
             choices.add(choice("Review Submission", ICON_QUESTS, () -> {
                 if(!QuestRevamp.submit(player,false)){showQuests(player,site,onBack);return;}
                 QuestService.QuestId accepted=active.getFirst();
@@ -508,7 +508,7 @@ public final class BedrockKicUI {
     private static String questBedrockIcon(QuestService.QuestId quest) {
         return switch (quest) {
             case ABUNDANCE, MERCY, COURAGE, OFFERING -> ICON_LIGHT;
-            case HUNT, SURVIVOR, PILGRIMAGE, CHALLENGER -> ICON_COMPASS;
+            case HUNT, SURVIVOR, PILGRIMAGE, CHALLENGER, HIDDEN_BLUE -> ICON_COMPASS;
             case BLOOD_PRICE, EXECUTIONER, COLLECTOR, WARDEN, DUEL -> ICON_DARK;
         };
     }

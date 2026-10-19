@@ -30,15 +30,16 @@ public final class QuestRevamp {
         put(p,"version",1);
         if(active)p.sendSystemMessage(Component.literal("Quest rules updated: your old quest was reset without taking items or spending a completion."));
     }
+    public static boolean usesSubmission(QuestId q) { return submission(q) || q == QuestId.PILGRIMAGE; }
     public static boolean submission(QuestId q) {return q==QuestId.ABUNDANCE||q==QuestId.COLLECTOR||q==QuestId.OFFERING;}
     public static QuestService.Type pool(QuestId q,long cycle) {
         if(q==QuestId.OFFERING)return (cycle&1)==0?QuestService.Type.TRIAL:QuestService.Type.CONTRACT;
         return q.type();
     }
-    public static boolean inPool(QuestId q,QuestService.Type t) {return q==QuestId.CHALLENGER||pool(q,KicCycle.currentCycleId())==t;}
+    public static boolean inPool(QuestId q,QuestService.Type t) {return (q==QuestId.CHALLENGER||q==QuestId.HIDDEN_BLUE)||pool(q,KicCycle.currentCycleId())==t;}
     public static int side(ServerPlayer p,QuestId q) {
         if(p!=null && QuestService.isStoredActive(p,q))return (int)get(p,"side");
-        if(q==QuestId.CHALLENGER)return p==null?1:QuestService.alignmentCode(p);
+        if(q==QuestId.CHALLENGER||q==QuestId.HIDDEN_BLUE)return p==null?1:QuestService.alignmentCode(p);
         return pool(q,KicCycle.currentCycleId())==QuestService.Type.TRIAL?1:-1;
     }
     public static boolean eligible(ServerPlayer p,QuestId q) {
@@ -46,7 +47,7 @@ public final class QuestRevamp {
     }
     static String identity(QuestId q,QuestObjectiveCatalog.Objective o) {
         // Quantity/difficulty variants of a single resource share one completion budget.
-        String key=q==QuestId.ABUNDANCE?o.key().replaceFirst("_\\d+$",""):o.key();
+        String key=q==QuestId.MERCY?"cures":q==QuestId.PILGRIMAGE?"compasses":q==QuestId.ABUNDANCE?o.key().replaceFirst("_\\d+$",""):o.key();
         return q.id()+"_"+key;
     }
     public static int limit(QuestId q) {return submission(q)||q==QuestId.EXECUTIONER?2:1;}
@@ -54,6 +55,7 @@ public final class QuestRevamp {
         String k=identity(q,o);return get(p,"cycle_"+k)==KicCycle.currentCycleId()+1?get(p,"count_"+k):0;
     }
     public static boolean available(ServerPlayer p,QuestId q,QuestObjectiveCatalog.Objective o) {
+        if(q==QuestId.HIDDEN_BLUE)return QuestExpansion.blueAvailable(p);
         if(q==QuestId.SURVIVOR)return System.currentTimeMillis()>=get(p,"endurance_next");
         return used(p,q,o)<limit(q);
     }
@@ -72,14 +74,15 @@ public final class QuestRevamp {
             samples.remove(p.getUUID());
         }
         if(q==QuestId.CHALLENGER){KarmaPlayerState.clearPrefix(p,"q2_spawner_");put(p,"encounters",0);put(p,"group_sum",0);}
-        if(q==QuestId.PILGRIMAGE){put(p,"route_count",0);put(p,"route_distance",0);put(p,"route_done",0);}
+        QuestExpansion.start(p,q);
     }
     public static boolean expired(ServerPlayer p) {return System.currentTimeMillis()-get(p,"started")>=WINDOW;}
     public static boolean ready(ServerPlayer p,QuestId q) {
+        if(QuestExpansion.handles(q))return QuestExpansion.ready(p,q);
         if(submission(q))return get(p,"submitted")==1;
         if(q==QuestId.SURVIVOR)return expired(p);
         if(q==QuestId.CHALLENGER)return get(p,"encounters")>=QuestService.activeObjective(p,q).targetCount();
-        return q==QuestId.PILGRIMAGE&&get(p,"route_done")==1;
+        return false;
     }
     public static boolean matches(ItemStack stack,Item item) {
         return !SocialTokenService.isToken(stack) && (item==Items.OAK_LOG?KarmaOfferingConfig.isLog(stack.getItem()):stack.is(item));
@@ -90,6 +93,7 @@ public final class QuestRevamp {
     /** First invocation creates a 30-second preview; confirmation rechecks the entire bundle. */
     public static boolean submit(ServerPlayer p,boolean confirm) {
         QuestId q=QuestService.activeQuest(p);
+        if(q==QuestId.PILGRIMAGE)return QuestExpansion.submitCompasses(p,confirm);
         if(!submission(q)||get(p,"debug_hold")==1||!eligible(p,q)||!KarmaGameRules.enabled(p,KarmaGameRules.QUESTS_ENABLED))return false;
         if(!KarmaGameRules.enabled(p,side(p,q)>0?KarmaGameRules.TRIALS_ENABLED:KarmaGameRules.CONTRACTS_ENABLED))return false;
         var o=QuestService.activeObjective(p,q);
@@ -109,17 +113,18 @@ public final class QuestRevamp {
     public static int socialReward(ServerPlayer p,QuestId q,QuestObjectiveCatalog.Objective o) {
         if(submission(q))return QuestObjectiveCatalog.fixedOfferingNet(o)+o.difficulty()*4;
         if(q==QuestId.SURVIVOR)return enduranceBase(p);
-        if(q==QuestId.PILGRIMAGE)return p==null?24:(int)Math.min(64,24+get(p,"route_distance")/512);
+        if(q==QuestId.PILGRIMAGE)return QuestExpansionRules.pilgrimageReputation(o.targetCount());
         if(q==QuestId.CHALLENGER)return 8*o.targetCount()+(int)(8*get(p,"group_sum")/100);
         return 0;
     }
     public static String preview(ServerPlayer p,QuestId q,QuestObjectiveCatalog.Objective o) {
+        if(QuestExpansion.handles(q))return QuestExpansion.preview(q,o);
         if(q==QuestId.SURVIVOR)return "20 Reputation per rewarded hour (max 6h), +0.5 per eligible hostile (max 40), Karma=floor(base/4), Untouchable +20 after at least 1h";
-        if(q==QuestId.PILGRIMAGE)return "24–64 Reputation based on direct route length, +15 Karma";
         if(q==QuestId.CHALLENGER)return (8*o.targetCount())+" social currency, "+(2*o.targetCount())+" signed Karma; group bonus up to 30% social";
         return socialReward(p,q,o)+ (side(p,q)>0?" Reputation, +":" Infamy, -")+(q==QuestId.PILGRIMAGE?15:5*o.difficulty())+" Karma";
     }
     public static boolean reward(ServerPlayer p,QuestId q,QuestObjectiveCatalog.Objective o) {
+        if(QuestExpansion.handles(q)){QuestExpansion.reward(p,q,o);return true;}
         if(!submission(q)&&q!=QuestId.SURVIVOR&&q!=QuestId.PILGRIMAGE&&q!=QuestId.CHALLENGER)return false;
         int social=socialReward(p,q,o), sign=(int)get(p,"side");
         int karma=q==QuestId.SURVIVOR?Math.min(40,social/4):q==QuestId.PILGRIMAGE?15:q==QuestId.CHALLENGER?2*o.targetCount():5*o.difficulty();
@@ -156,20 +161,6 @@ public final class QuestRevamp {
             long spend=Math.min(Math.min(credit*72000/20_000_000,dt),432000-get(p,"rewarded_ticks"));
             put(p,"rewarded_ticks",get(p,"rewarded_ticks")+Math.max(0,spend));
             put(p,"credit",Math.min(20_000_000,Math.max(0,credit-spend*20_000_000/72000)));
-        } else if(q==QuestId.PILGRIMAGE && eligible && p.level().getServer().getTickCount()%20==0)pilgrimage(p);
-    }
-    private static void pilgrimage(ServerPlayer p) {
-        if(!"minecraft:overworld".equals(p.level().dimension().identifier().toString()))return;
-        for(ShrineSite site:ShrineState.get(p.level().getServer()).sites()){
-            if(site.lodestonePosition().isEmpty())continue;
-            BlockPos pos=site.actualLodestonePosition();if(p.distanceToSqr(pos.getX()+.5,pos.getY()+.5,pos.getZ()+.5)>64)continue;
-            int n=(int)get(p,"route_count");
-            if(n==0){put(p,"route_0",pos.asLong());put(p,"route_count",1);return;}
-            BlockPos last=BlockPos.of(get(p,"route_"+(n-1)));
-            double distance=Math.sqrt(last.distSqr(pos));if(distance<256)return;
-            if(n==3){if(pos.asLong()==get(p,"route_0")){put(p,"route_distance",get(p,"route_distance")+(long)distance);put(p,"route_done",1);QuestService.complete(p,QuestId.PILGRIMAGE);}return;}
-            for(int i=0;i<n;i++)if(pos.asLong()==get(p,"route_"+i))return;
-            put(p,"route_"+n,pos.asLong());put(p,"route_count",n+1);put(p,"route_distance",get(p,"route_distance")+(long)distance);return;
         }
     }
     public static void encounter(ServerLevel level,BlockPos pos,Set<UUID> participants) {
@@ -187,9 +178,9 @@ public final class QuestRevamp {
         }
     }
     public static String status(ServerPlayer p,QuestId q) {
+        if(QuestExpansion.handles(q))return QuestExpansion.status(p,q);
         if(q==QuestId.SURVIVOR)return "Rewarded time: "+get(p,"rewarded_ticks")/1200+"m / 360m; bank: "+get(p,"credit")/10000+" weighted blocks; kill reward: "+get(p,"kills_half")/2.0+"; base: "+enduranceBase(p)+"; Untouchable: "+(get(p,"damage")==0)+"; window: "+QuestService.formatDuration(Math.max(0,WINDOW-(System.currentTimeMillis()-get(p,"started"))));
         if(q==QuestId.CHALLENGER)return "Distinct spawners: "+get(p,"encounters")+"/"+QuestService.activeObjective(p,q).targetCount()+"; group bonus sum: "+get(p,"group_sum")+"%";
-        if(q==QuestId.PILGRIMAGE)return "Shrines visited: "+get(p,"route_count")+"/3; return to first after third; route: "+get(p,"route_distance")+" blocks";
         return "";
     }
 }

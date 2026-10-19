@@ -50,7 +50,7 @@ public final class QuestObjectiveCatalog {
         if (quest == null) return List.of();
         return switch (quest) {
             case ABUNDANCE -> abundance();
-            case MERCY -> List.of(existing("cure_one", "Complete the existing Mercy Trial by curing 1 Zombie Villager.", 3));
+            case MERCY -> mercy();
             // "Ancient City center" is intentionally excluded until its center is precisely defined.
             // "Dangerous encounter" is intentionally excluded until it has a deterministic trigger.
             case COURAGE -> List.of(
@@ -66,7 +66,7 @@ public final class QuestObjectiveCatalog {
                 offer(Tier.LATE, "nether", "Offer 8 quartz, 4 magma cream, 2 blaze rods and 1 ghast tear", 5,item(Items.QUARTZ,8),item(Items.MAGMA_CREAM,4),item(Items.BLAZE_ROD,2),item(Items.GHAST_TEAR,1)),
                 offer(Tier.ENDGAME, "relics", "Offer 2 echo shards, 2 shulker shells, 1 diamond and 4 ender pearls", 7,item(Items.ECHO_SHARD,2),item(Items.SHULKER_SHELL,2),item(Items.DIAMOND,1),item(Items.ENDER_PEARL,4)));
             case SURVIVOR -> List.of(existing("endurance", "Explore and survive during a 12-hour window. Movement unlocks rewarded online time.", 5));
-            case BLOOD_PRICE -> List.of(existing("kill_period", "Make valid kills during the 30-minute active timer.", 4));
+            case BLOOD_PRICE -> List.of(existing("kill_period", "Make valid kills: 30 minutes at stages 0-I, 16 minutes from stage II.", 4));
             case EXECUTIONER -> List.of(
                 kill("ravager", "Kill a Ravager", 5, "minecraft:ravager"),
                 kill("evoker", "Kill an Evoker", 5, "minecraft:evoker"),
@@ -82,7 +82,8 @@ public final class QuestObjectiveCatalog {
                 offer(Tier.LATE,"deep_cache", "Submit 4 diamonds and 16 obsidian", 6,item(Items.DIAMOND,4),item(Items.OBSIDIAN,16)),
                 offer(Tier.ENDGAME,"end_cache", "Submit 4 shulker shells and 16 ender pearls", 7,item(Items.SHULKER_SHELL,4),item(Items.ENDER_PEARL,16)),
                 offer(Tier.ENDGAME,"ancient_cache", "Submit 4 echo shards and 1 totem", 8,item(Items.ECHO_SHARD,4),item(Items.TOTEM_OF_UNDYING,1)));
-            case PILGRIMAGE -> List.of(existing("shrine_route", "Visit three distinct shrines at least 256 blocks apart, then return to the starting shrine.", 4));
+            case PILGRIMAGE -> pilgrimage();
+            case HIDDEN_BLUE -> List.of(existing("ocean_treasure", "Fish in ocean open water for a special book. An enchanted golden apple ends the quest as a failure; you keep the catch.", 4));
             case CHALLENGER -> challenger();
             case WARDEN -> List.of(kill("warden", "Kill a Warden", 10, "minecraft:warden"));
             case DUEL -> List.of(new Objective("designated_duel", "Challenge a player; both players must explicitly agree. Only the designated opponent's kill counts.",
@@ -94,6 +95,9 @@ public final class QuestObjectiveCatalog {
     /** Stage 0-1 use early objectives, Stage 2 mid, Stage 3 late, and Stages 4-5 endgame. */
     public static List<Integer> availableObjectiveIndexes(QuestService.QuestId quest, int communityStage) {
         List<Objective> pool = objectives(quest);
+        if (quest == QuestService.QuestId.MERCY && communityStage != 1) return List.of();
+        if (quest == QuestService.QuestId.HIDDEN_BLUE && communityStage < 2) return List.of();
+        if (quest == QuestService.QuestId.PILGRIMAGE) return List.of(QuestExpansionRules.pilgrimageCount(communityStage)-1);
         Tier maximumTier = communityStage <= 1 ? Tier.EARLY
             : communityStage == 2 ? Tier.MID
             : communityStage == 3 ? Tier.LATE : Tier.ENDGAME;
@@ -140,6 +144,16 @@ public final class QuestObjectiveCatalog {
         for(int n : new int[]{4,8,16}) out.add(offer(Tier.LATE,"diamond_"+n,"Submit "+n+" diamonds",6+n/8,item(Items.DIAMOND,n)));
         for(String fish : new String[]{"cod","salmon","tropical_fish","pufferfish"}) for(int n : new int[]{8,16,32}) out.add(offer(Tier.EARLY,fish+"_"+n,"Submit "+n+" "+fish.replace('_',' '),1+n/8,item(item("minecraft:"+fish),n)));
         out.add(offer(Tier.EARLY,"mixed_logs","Submit 32 mixed logs, wood, stems or hyphae",2,item(Items.OAK_LOG,32)));
+        return List.copyOf(out);
+    }
+    private static List<Objective> mercy() {
+        List<Objective> out = new ArrayList<>();
+        for (int n=1;n<=4;n++) out.add(new Objective("cure_"+n,"Cure "+n+" Zombie Villager(s). No timer.",n<=2?1:2,Kind.EXISTING,List.of(),null,n));
+        return List.copyOf(out);
+    }
+    private static List<Objective> pilgrimage() {
+        List<Objective> out = new ArrayList<>();
+        for (int n=1;n<=5;n++) out.add(new Objective("compasses_"+n,"Submit "+n+" compasses bound to different valid shrines (consumed).",n,Kind.EXISTING,List.of(),null,n));
         return List.copyOf(out);
     }
     private static List<Objective> challenger() {

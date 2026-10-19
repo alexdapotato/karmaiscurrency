@@ -31,17 +31,16 @@ public final class LightShrineService {
 	}
 
 	public static int mercyTrialDurationMinutes() {
-		return TRIAL_DURATION_MINUTES;
+		return 0;
 	}
 
 	public static String mercyQuestObjective() {
-		return "Cure 1 Zombie Villager before the " + TRIAL_DURATION_MINUTES + "-minute timer expires.";
+		return "Cure the assigned 1-4 Zombie Villagers. No timer; available at world stage I.";
 	}
 
-	public static String mercyQuestRewardDescription() {
-		return "+" + QuestConfig.current().mercyKarma + " Karma and +"
-			+ ShrineConfig.current().socialMercyTrialGain + " Reputation.";
-	}
+    public static String mercyQuestRewardDescription() {
+        return "1-2 villagers: +15 Karma; 3-4: +30 Karma. Reputation: 20/35/50/65.";
+    }
 
 	public static void open(ServerPlayer player) {
 		open(player, null);
@@ -64,37 +63,9 @@ public final class LightShrineService {
 		return startTrial(player, trial, false);
 	}
 
-	private static boolean startTrial(ServerPlayer player, int trial, boolean requireLightKarma) {
-		if (!KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
-				|| !KarmaGameRules.enabled(player, KarmaGameRules.TRIALS_ENABLED)) {
-			player.sendSystemMessage(Component.literal("Trials are disabled for this world."));
-			return false;
-		}
-		if (requireLightKarma && KarmaService.get(player) < KarmaService.karma(100)) {
-			player.sendSystemMessage(Component.literal("You need at least +100 Karma to undertake a Light trial."));
-			return false;
-		}
-		// Protection Trial is retired from the player-facing catalog and legacy start paths.
-		if (trial != TRIAL_MERCY) {
-			return false;
-		}
-		if (trial(player) != TRIAL_NONE) {
-			player.sendSystemMessage(Component.literal("You already have an active Light trial."));
-			return false;
-		}
-		int cooldown = Math.max(0, KarmaPlayerState.getInt(player, "light_trial_cd_until") - currentMinute(player));
-		if (requireLightKarma && cooldown > 0) {
-			player.sendSystemMessage(Component.literal("Light trials are on cooldown for " + cooldown + " minute(s)."));
-			return false;
-		}
-
-		KarmaPlayerState.setInt(player, "light_trial", trial);
-		KarmaPlayerState.setInt(player, "light_trial_expiry", currentMinute(player) + TRIAL_DURATION_MINUTES);
-		String name = trial == TRIAL_MERCY ? "Mercy Trial" : "Protection Trial";
-		player.sendSystemMessage(Component.literal(name + " begun. Cure 1 Zombie Villager: apply Weakness, use a Golden Apple, then wait for conversion. You have " + TRIAL_DURATION_MINUTES + " minutes."));
-		player.playSound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0F, 1.2F);
-		return true;
-	}
+    private static boolean startTrial(ServerPlayer player, int trial, boolean requireLightKarma) {
+        return trial == TRIAL_MERCY && QuestService.accept(player,QuestService.QuestId.MERCY);
+    }
 
 	public static boolean claimBlessing(ServerPlayer player, int blessing) {
 		if (!CurseBlessingService.canUseLightShrine(player)) {
@@ -189,6 +160,10 @@ public final class LightShrineService {
 	}
 
 	public static void completeTrial(ServerPlayer player, int expectedTrial) {
+        if (expectedTrial == TRIAL_MERCY && QuestService.isStoredActive(player,QuestService.QuestId.MERCY)) {
+            QuestExpansion.cured(player);
+            return;
+        }
         if (expectedTrial==TRIAL_MERCY && QuestService.isActive(player,QuestService.QuestId.MERCY) && (!QuestRevamp.eligible(player,QuestService.QuestId.MERCY) || QuestRevamp.get(player,"debug_hold")==1)) return;
 		if (trial(player) != expectedTrial) {
 			return;

@@ -20,7 +20,7 @@ public final class OverlevelBookService {
         tag.putString(MARKER, enchantment);
         book.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         book.set(DataComponents.LORE, new ItemLore(java.util.List.of(
-            Component.literal("Requires World Progression Stage 3 to apply."),
+            Component.literal("Requires World Progression Stage 2 to apply."),
             Component.literal("Apply using an anvil. Normal XP costs and compatibility rules apply."))));
     }
 
@@ -41,7 +41,7 @@ public final class OverlevelBookService {
     /** Preserve existing special levels on repair, but never manufacture extra levels with ordinary books. */
     static int allowedMaximum(int normalMax, int existing, int stored, boolean special, int stage) {
         int maximum = Math.max(normalMax, existing);
-        if (special && stage >= 3 && stored == normalMax + 1)
+        if (special && stage >= 2 && stored == normalMax + 1)
             maximum = Math.max(maximum, stored);
         return maximum;
     }
