@@ -21,6 +21,7 @@ public final class KarmaGameRules {
 	public static final GameRule<Boolean> BLESSINGS_ENABLED = booleanRule("blessings_enabled", true);
 	public static final GameRule<Boolean> CURSES_ENABLED = booleanRule("curses_enabled", true);
 	public static final GameRule<Boolean> COMPASS_COOLDOWN_ENABLED = booleanRule("compass_cooldown_enabled", true);
+	public static final GameRule<Boolean> HUNT_ENABLED = booleanRule("hunt_enabled", true);
 	public static final GameRule<Boolean> QUESTS_ENABLED = booleanRule("quests_enabled", true);
 	public static final GameRule<Boolean> CONTRACTS_ENABLED = booleanRule("contracts_enabled", true);
 	public static final GameRule<Boolean> DUELS_ENABLED = booleanRule("duels_enabled", false);

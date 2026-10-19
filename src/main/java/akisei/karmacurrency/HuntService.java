@@ -58,7 +58,8 @@ public final class HuntService {
 
     public static long debugAdvance(MinecraftServer server, long minutes) {
         if (minutes <= 0) return DEBUG_OFFSET_MILLIS.get();
-        if (!server.getGameRules().get(KarmaGameRules.QUESTS_ENABLED)
+        if (!server.getGameRules().get(KarmaGameRules.HUNT_ENABLED)
+                || !server.getGameRules().get(KarmaGameRules.QUESTS_ENABLED)
                 || !server.getGameRules().get(KarmaGameRules.TRIALS_ENABLED)) {
             tick(server);
             return DEBUG_OFFSET_MILLIS.get();
@@ -92,9 +93,10 @@ public final class HuntService {
     }
 
     public static boolean acceptHunt(MinecraftServer server, ServerPlayer player) {
-        if (!KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
+        if (!KarmaGameRules.enabled(player, KarmaGameRules.HUNT_ENABLED)
+                || !KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
                 || !KarmaGameRules.enabled(player, KarmaGameRules.TRIALS_ENABLED)) {
-            player.sendSystemMessage(Component.literal("The Hunt is disabled by quests_enabled or trials_enabled."));
+            player.sendSystemMessage(Component.literal("The Hunt is disabled by hunt_enabled, quests_enabled or trials_enabled."));
             return false;
         }
         if (!QuestService.canBecomeHunted(player)) {
@@ -266,9 +268,10 @@ public final class HuntService {
     }
 
     public static boolean requestCompass(MinecraftServer server, ServerPlayer hunter) {
-        if (!KarmaGameRules.enabled(hunter, KarmaGameRules.QUESTS_ENABLED)
+        if (!KarmaGameRules.enabled(hunter, KarmaGameRules.HUNT_ENABLED)
+                || !KarmaGameRules.enabled(hunter, KarmaGameRules.QUESTS_ENABLED)
                 || !KarmaGameRules.enabled(hunter, KarmaGameRules.CONTRACTS_ENABLED)) {
-            hunter.sendSystemMessage(Component.literal("Hunter participation is disabled by quests_enabled or contracts_enabled."));
+            hunter.sendSystemMessage(Component.literal("Hunter participation is disabled by hunt_enabled, quests_enabled or contracts_enabled."));
             return false;
         }
         HuntState state = HuntState.get(server);
@@ -313,7 +316,8 @@ public final class HuntService {
     }
 
     public static void tick(MinecraftServer server) {
-        if (!server.getGameRules().get(KarmaGameRules.QUESTS_ENABLED)
+        if (!server.getGameRules().get(KarmaGameRules.HUNT_ENABLED)
+                || !server.getGameRules().get(KarmaGameRules.QUESTS_ENABLED)
                 || !server.getGameRules().get(KarmaGameRules.TRIALS_ENABLED)) {
             disableAllHunts(server);
             return;
@@ -371,7 +375,8 @@ public final class HuntService {
         HuntState.HuntRecord hunt = state.findHuntByHunted(huntedPlayer.getUUID());
         if (hunt == null || killer == null || !hunt.isHunter(killer.getUUID())) return KillHandling.NOT_A_HUNT_KILL;
 
-        if (!KarmaGameRules.enabled(huntedPlayer, KarmaGameRules.QUESTS_ENABLED)
+        if (!KarmaGameRules.enabled(huntedPlayer, KarmaGameRules.HUNT_ENABLED)
+                || !KarmaGameRules.enabled(huntedPlayer, KarmaGameRules.QUESTS_ENABLED)
                 || !KarmaGameRules.enabled(huntedPlayer, KarmaGameRules.TRIALS_ENABLED)) {
             disableAllHunts(server);
             return KillHandling.CANCELLED_BY_GAMERULE;
@@ -419,9 +424,10 @@ public final class HuntService {
     }
 
     public static boolean debugForceStart(MinecraftServer server, ServerPlayer hunted) {
-        if (!KarmaGameRules.enabled(hunted, KarmaGameRules.QUESTS_ENABLED)
+        if (!KarmaGameRules.enabled(hunted, KarmaGameRules.HUNT_ENABLED)
+                || !KarmaGameRules.enabled(hunted, KarmaGameRules.QUESTS_ENABLED)
                 || !KarmaGameRules.enabled(hunted, KarmaGameRules.TRIALS_ENABLED)) {
-            hunted.sendSystemMessage(Component.literal("The Hunted role is disabled by quests_enabled or trials_enabled."));
+            hunted.sendSystemMessage(Component.literal("The Hunted role is disabled by hunt_enabled, quests_enabled or trials_enabled."));
             return false;
         }
         HuntState state = HuntState.get(server);
@@ -475,7 +481,8 @@ public final class HuntService {
     /** Ends persisted Hunted participation without rewards when its required switch is disabled. */
     private static void disableAllHunts(MinecraftServer server) {
         HuntState state = HuntState.get(server);
-        String reason = !server.getGameRules().get(KarmaGameRules.QUESTS_ENABLED)
+        String reason = !server.getGameRules().get(KarmaGameRules.HUNT_ENABLED) ? "hunt_enabled is false"
+            : !server.getGameRules().get(KarmaGameRules.QUESTS_ENABLED)
             ? "quests_enabled is false"
             : "trials_enabled is false";
         for (HuntState.HuntRecord hunt : state.activeHunts()) {
@@ -573,6 +580,7 @@ public final class HuntService {
     }
 
     public static String status(MinecraftServer server) {
+        if (!server.getGameRules().get(KarmaGameRules.HUNT_ENABLED)) return "The Hunt is disabled by hunt_enabled.";
         if (!server.getGameRules().get(KarmaGameRules.QUESTS_ENABLED)) {
             return "The Hunt is disabled by the quests_enabled gamerule.";
         }

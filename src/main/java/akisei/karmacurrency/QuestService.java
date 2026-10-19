@@ -302,7 +302,7 @@ public final class QuestService {
     private static boolean questFeatureEnabled(ServerPlayer player, QuestId quest) {
         if (player == null || quest == null) return false;
         if (quest == QuestId.DUEL) return false;
-        if (quest == QuestId.HUNT) return KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED);
+        if (quest == QuestId.HUNT) return KarmaGameRules.enabled(player, KarmaGameRules.HUNT_ENABLED) && KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED);
         if (!KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)) return false;
         return QuestRevamp.side(player,quest) > 0
             ? KarmaGameRules.enabled(player, KarmaGameRules.TRIALS_ENABLED)
@@ -337,7 +337,8 @@ public final class QuestService {
         if (server == null) return false;
         int maxHunts = Math.max(0, server.getGameRules().get(KarmaGameRules.MAX_ONGOING_HUNTS));
         HuntState state = HuntState.get(server);
-        return KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
+        return KarmaGameRules.enabled(player, KarmaGameRules.HUNT_ENABLED)
+            && KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
             && KarmaGameRules.enabled(player, KarmaGameRules.TRIALS_ENABLED)
             && SocialCurrencyService.getStance(player) == SocialCurrencyService.Stance.LIGHT
             && CurseBlessingService.canUseLightShrine(player)
@@ -349,7 +350,8 @@ public final class QuestService {
     public static boolean canJoinHunt(ServerPlayer player) {
         if (alignmentCode(player)==0) return false;
         MinecraftServer server = player.level().getServer();
-        if (server == null || !KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
+        if (server == null || !KarmaGameRules.enabled(player, KarmaGameRules.HUNT_ENABLED)
+                || !KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)
                 || !KarmaGameRules.enabled(player, KarmaGameRules.CONTRACTS_ENABLED)
                 || !CurseBlessingService.canUseDarkShrine(player)
                 || isHuntParticipant(server, player) || !HuntService.hasActiveHunt(server)) return false;
@@ -451,6 +453,7 @@ public final class QuestService {
             return "Quests are disabled by the quests_enabled gamerule.";
         }
         if (quest == QuestId.HUNT) {
+            if (!KarmaGameRules.enabled(player, KarmaGameRules.HUNT_ENABLED)) return "The Hunt is disabled by hunt_enabled.";
             if (isActive(player, QuestId.HUNT)) return "You are already participating in The Hunt.";
             if (canBecomeHunted(player)) return "Choose whether to become the Hunted.";
             if (canJoinHunt(player)) return "Choose an active Hunt to join as a Hunter.";

@@ -13,7 +13,7 @@ import java.util.Properties;
 public final class QuestConfig {
     private static final Path FILE = KicConfigPaths.file("karmaiscurrency_quests.properties");
     private static final String CONFIG_VERSION_KEY = "quest.configVersion";
-    private static final int CONFIG_VERSION = 3;
+    private static final int CONFIG_VERSION = 4;
     private static QuestConfig current = defaults();
 
     public final int abundanceKarmaPerDifficulty;
@@ -55,7 +55,7 @@ public final class QuestConfig {
         bloodPriceInfamyPerKill = getInt(properties, "quest.reward.bloodPriceInfamyPerKill", 2, 0, 100000);
         survivorIntervalReputation = getInt(properties, "quest.reward.survivorIntervalReputation", 8, 0, 100000);
         survivorFinalReputation = getInt(properties, "quest.reward.survivorFinalReputation", 50, 0, 1000000);
-        wardenInfamy = getInt(properties, "quest.reward.wardenInfamy", 150, 0, 1000000);
+        wardenInfamy = getInt(properties, "quest.reward.wardenInfamy", 250, 0, 1000000);
         wardenKarma = getInt(properties, "quest.reward.wardenKarma", -50, -100000, 100000);
         bonusUntouchableReputation = getInt(properties, "quest.bonus.untouchableReputation", 10, 0, 100000);
         bonusSticksAndStonesReputation = getInt(properties, "quest.bonus.sticksAndStonesReputation", 10, 0, 100000);
@@ -123,7 +123,7 @@ public final class QuestConfig {
         p.setProperty("quest.reward.bloodPriceInfamyPerKill", "2");
         p.setProperty("quest.reward.survivorIntervalReputation", "8");
         p.setProperty("quest.reward.survivorFinalReputation", "50");
-        p.setProperty("quest.reward.wardenInfamy", "150");
+        p.setProperty("quest.reward.wardenInfamy", "250");
         p.setProperty("quest.reward.wardenKarma", "-50");
         p.setProperty("quest.bonus.untouchableReputation", "10");
         p.setProperty("quest.bonus.sticksAndStonesReputation", "10");
@@ -178,6 +178,7 @@ public final class QuestConfig {
             migrateDefault(properties, "quest.reward.contractKarmaPerDifficulty", "-1", "-5");
             migrateDefault(properties, "quest.reward.wardenKarma", "-25", "-50");
         }
+        if (storedVersion < 4) migrateDefault(properties, "quest.reward.wardenInfamy", "150", "250");
         properties.setProperty(CONFIG_VERSION_KEY, Integer.toString(CONFIG_VERSION));
         return true;
     }
