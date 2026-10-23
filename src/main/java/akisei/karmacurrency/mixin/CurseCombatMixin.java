@@ -68,9 +68,11 @@ public abstract class CurseCombatMixin {
             if (CurseBlessingService.hasBlessing(victimPlayer, "aegis")) {
                 long now = victimPlayer.level().getGameTime();
                 long availableAt = KarmaPlayerState.get(victimPlayer, "aegis_next_proc");
-                if (now >= availableAt && victimPlayer.getRandom().nextFloat() < 0.10F) {
+                if (amount > 0 && !source.is(net.minecraft.tags.DamageTypeTags.BYPASSES_INVULNERABILITY) && now < KarmaPlayerState.get(victimPlayer,"aegis_protected_until")) {
                     amount *= 0.50F;
-                    KarmaPlayerState.set(victimPlayer, "aegis_pending_proc_until", now + 300L);
+                } else if (amount > 0 && !source.is(net.minecraft.tags.DamageTypeTags.BYPASSES_INVULNERABILITY) && now >= availableAt && victimPlayer.getRandom().nextFloat() < 0.10F) {
+                    amount *= 0.50F;
+                    KarmaPlayerState.set(victimPlayer, "aegis_pending_proc_until", now + (CurseBlessingService.blessingStack(victimPlayer,"aegis")>=2?200L:300L));
                 }
             }
         }
@@ -85,11 +87,18 @@ public abstract class CurseCombatMixin {
         if (victim instanceof ServerPlayer victimPlayer) {
             long pendingProc = KarmaPlayerState.get(victimPlayer, "aegis_pending_proc_until");
             if (pendingProc > 0L) {
-                if (cir.getReturnValue()) KarmaPlayerState.set(victimPlayer, "aegis_next_proc", pendingProc);
+                if (cir.getReturnValue()) {
+                    KarmaPlayerState.set(victimPlayer, "aegis_next_proc", pendingProc);
+                    KarmaPlayerState.set(victimPlayer, "aegis_protected_until", victimPlayer.level().getGameTime()+30L);
+                }
                 KarmaPlayerState.clear(victimPlayer, "aegis_pending_proc_until");
             }
         }
         if (!cir.getReturnValue()) return;
+        if(victim instanceof ServerPlayer p && CurseBlessingService.hasBlessing(p,"aegis")
+            && !source.is(net.minecraft.tags.DamageTypeTags.BYPASSES_INVULNERABILITY)
+            && p.level().getGameTime()<KarmaPlayerState.get(p,"aegis_protected_until"))
+            level.playSound(null,p.getX(),p.getY(),p.getZ(),net.minecraft.sounds.SoundEvents.SHIELD_BLOCK,net.minecraft.sounds.SoundSource.PLAYERS,0.7F,1.1F);
 
         ServerPlayer attacker = source.getEntity() instanceof ServerPlayer player ? player : null;
         if (victim instanceof ServerPlayer victimPlayer) CurseBlessingService.markInCombat(victimPlayer);

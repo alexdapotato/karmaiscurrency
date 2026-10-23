@@ -24,12 +24,17 @@ public final class QuestExpansion {
     private static void put(ServerPlayer p, String key, long value) { QuestRevamp.put(p, key, value); }
     public static boolean handles(QuestId q) { return q == QuestId.MERCY || q == QuestId.PILGRIMAGE || q == QuestId.HIDDEN_BLUE; }
     public static boolean stageAllows(QuestId q, int stage) {
+        if(q==QuestId.COURAGE || q==QuestId.DUEL)return false;
         return q == QuestId.MERCY ? stage == 1 : q != QuestId.HIDDEN_BLUE || stage >= 2;
     }
     public static boolean blueAvailable(ServerPlayer p) {
         return QuestExpansionRules.blueAvailable(KicCycle.currentCycleId(), get(p,"blue_next_cycle"), get(p,"blue_attempt_cycle"));
     }
     public static void migrate(ServerPlayer p) {
+        if(QuestService.activeQuest(p)==QuestId.COURAGE) {
+            QuestService.cancelActive(p);
+            p.sendSystemMessage(Component.literal("Courage has been retired. Your quest slot is available again."));
+        }
         if (get(p,"expansion_version") != 0) return;
         put(p,"expansion_version",1);
         if (QuestService.isStoredActive(p,QuestId.MERCY) || QuestService.isStoredActive(p,QuestId.PILGRIMAGE)) {
@@ -61,7 +66,7 @@ public final class QuestExpansion {
     public static String preview(QuestId q, QuestObjectiveCatalog.Objective o) {
         if (q == QuestId.MERCY) return "+" + QuestExpansionRules.mercyKarma(o.targetCount()) + " Karma, +" + QuestExpansionRules.mercyReputation(o.targetCount()) + " Reputation.";
         if (q == QuestId.PILGRIMAGE) return "+15 Karma, +" + QuestExpansionRules.pilgrimageReputation(o.targetCount()) + " Reputation. Consumes " + o.targetCount() + " compasses bound to distinct valid shrines.";
-        return "Book: success, keep the book and gain 15 alignment-signed Karma. Enchanted golden apple: failure, keep the apple, no quest currency or Karma. One outcome per cycle; success blocks the next 3 cycles.";
+        return "Book: success, keep the book and gain 15 Karma toward your accepted alignment. Enchanted golden apple: failure, keep the apple, no quest reward. One attempt per cycle. After success, wait three full cycles.";
     }
     public static void reward(ServerPlayer p, QuestId q, QuestObjectiveCatalog.Objective o) {
         int karma = q == QuestId.MERCY ? QuestExpansionRules.mercyKarma(o.targetCount()) : 15;

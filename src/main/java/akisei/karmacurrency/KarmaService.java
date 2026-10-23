@@ -28,7 +28,7 @@ public final class KarmaService {
 	public static final String PLAYER_HEAD_COOLDOWN_OBJECTIVE = "player_head_cd";
 	public static final int POINTS_PER_KARMA = 100;
 	public static final int STARTING_ALIGNMENT_KARMA = 100;
-	/** Personal Karma bands also set the Karma cap at World Stages 0..3; Influence thresholds live in CommunityProgressionService. */
+	/** Personal title/decay bands; world-stage earning caps are defined separately. */
 	public static final int[] PERSONAL_KARMA_THRESHOLDS = {100, 300, 600, 1000};
 	public static final int SHRINE_COMPASS_COOLDOWN_MINUTES = 10;
 	public static final int PLAYER_HEAD_COOLDOWN_MINUTES = 60;
@@ -300,11 +300,14 @@ public final class KarmaService {
 	 * the next band. Operators can set a per-player cap to test or pace a world
 	 * without changing the server configuration; zero clears that override.
 	 */
+	public static int worldStageKarmaCap(int stage) {
+        return new int[]{200,400,600,800,1000,1500}[Math.max(0,Math.min(5,stage))];
+    }
+
 	public static int currentCap(ServerPlayer player) {
 		int configuredCap = karma(ShrineConfig.current().karmaCap);
 		int worldStage = CommunityProgressionService.stage(player);
-		int stageCapWholeKarma = worldStage < PERSONAL_KARMA_THRESHOLDS.length
-			? PERSONAL_KARMA_THRESHOLDS[worldStage] : ShrineConfig.current().karmaCap;
+		int stageCapWholeKarma = worldStageKarmaCap(worldStage);
 		int worldCap = Math.min(configuredCap, karma(stageCapWholeKarma));
 		int override = KarmaPlayerState.getInt(player, "karma_cap_override");
 		if (override > 0) return Math.min(worldCap, karma(override));
@@ -330,6 +333,20 @@ public final class KarmaService {
         String sign = bounded > before ? "+" : "";
 		KicMessages.change(player, "Karma", bounded - before, reason);
 	}
+
+    /** Spend existing Karma toward zero, even if a stage change left the balance above its new earning cap. */
+    public static void spendSigilKarma(ServerPlayer player,int wholeKarma) {
+        int amount=karma(wholeKarma),before=get(player);
+        if(amount<0 || Math.abs((long)before)<amount)throw new IllegalArgumentException("Insufficient Karma");
+        SocialCurrencyService.getStance(player);
+        int after=before-Integer.signum(before)*amount;
+        score(player).set(after);
+        SocialCurrencyService.getStance(player);
+        updateProgression(player,after);
+        updateHealthBonus(player,after,ShrineConfig.current());
+        KicHistoryService.recordKarma(player,after-before,"Sigil purchase");
+        KicMessages.change(player,"Karma",after-before,"Sigil purchase");
+    }
 
 	public static int getShrineCompassCooldownMinutes(ServerPlayer player) {
 		return Math.max(0, KarmaPlayerState.getInt(player, "shrine_compass_until") - currentMinute(player));

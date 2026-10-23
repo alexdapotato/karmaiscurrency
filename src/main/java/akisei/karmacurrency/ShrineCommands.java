@@ -24,7 +24,10 @@ public final class ShrineCommands {
 	}
 
 	public static void register() {
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(Commands.literal("kd").requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)));
+            var kd=dispatcher.getRoot().getChild("kd");
+            kd.addChild(
 			Commands.literal("shrine")
 				.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
 				.then(Commands.literal("locate").executes(context -> locate(context.getSource().getPlayerOrException(), Optional.empty())))
@@ -75,7 +78,8 @@ public final class ShrineCommands {
 										IntegerArgumentType.getInteger(context, "ring"),
 										IntegerArgumentType.getInteger(context, "index")))))))
 				)
-		));
+		.build());
+        });
 	}
 
 	private static LiteralArgumentBuilder<CommandSourceStack> spawnType(String name, ShrineType type) {
@@ -298,7 +302,7 @@ public final class ShrineCommands {
 		int shown = 0;
 		for (ShrineRingPlacement.RingCandidate candidate : candidates) {
 			if (shown++ >= 32) {
-				source.sendSuccess(() -> Component.literal("... output truncated at 32 candidates; use /shrine debug ring <n> for a specific ring."), false);
+				source.sendSuccess(() -> Component.literal("... output truncated at 32 candidates; use /kd shrine debug ring <n> for a specific ring."), false);
 				break;
 			}
 			ChunkPos chunk = candidate.chunk();

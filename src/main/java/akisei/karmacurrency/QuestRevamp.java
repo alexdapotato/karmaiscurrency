@@ -119,8 +119,8 @@ public final class QuestRevamp {
     }
     public static String preview(ServerPlayer p,QuestId q,QuestObjectiveCatalog.Objective o) {
         if(QuestExpansion.handles(q))return QuestExpansion.preview(q,o);
-        if(q==QuestId.SURVIVOR)return "20 Reputation per rewarded hour (max 6h), +0.5 per eligible hostile (max 40), Karma=floor(base/4), Untouchable +20 after at least 1h";
-        if(q==QuestId.CHALLENGER)return (8*o.targetCount())+" social currency, "+(2*o.targetCount())+" signed Karma; group bonus up to 30% social";
+        if(q==QuestId.SURVIVOR)return socialReward(p,q,o)+" Reputation, +"+Math.min(40,enduranceBase(p)/4)+" Karma earned so far. Up to 160 Reputation and 40 Karma, plus 20 Reputation for staying unharmed with at least 1 hour credited.";
+        if(q==QuestId.CHALLENGER)return (8*o.targetCount())+(side(p,q)>0?" Reputation, +":" Infamy, -")+(2*o.targetCount())+" Karma; group reward up to 30% extra influence";
         return socialReward(p,q,o)+ (side(p,q)>0?" Reputation, +":" Infamy, -")+(q==QuestId.PILGRIMAGE?15:5*o.difficulty())+" Karma";
     }
     public static boolean reward(ServerPlayer p,QuestId q,QuestObjectiveCatalog.Objective o) {
@@ -154,13 +154,13 @@ public final class QuestRevamp {
             for(int i=0;i<now.length;i++)now[i]=p.getStats().getValue(Stats.CUSTOM.get(MOVEMENT[i]));
             Sample old=samples.put(p.getUUID(),new Sample(p,tick,now,eligible));
             if(!eligible||expired(p)||old==null||old.player()!=p||!old.eligible()||tick-old.tick()>200||tick<=old.tick())return;
-            long credit=get(p,"credit");
+            long credit=Math.min(1_666_666,get(p,"credit"));
             for(int i=0;i<now.length;i++)credit+=Math.max(0,now[i]-old.stats()[i])*WEIGHTS[i];
             // Units: 1/100 cm. 2,000 blocks = 20,000,000 units per rewarded hour.
             long dt=tick-old.tick();
             long spend=Math.min(Math.min(credit*72000/20_000_000,dt),432000-get(p,"rewarded_ticks"));
             put(p,"rewarded_ticks",get(p,"rewarded_ticks")+Math.max(0,spend));
-            put(p,"credit",Math.min(20_000_000,Math.max(0,credit-spend*20_000_000/72000)));
+            put(p,"credit",Math.min(1_666_666,Math.max(0,credit-spend*20_000_000/72000)));
         }
     }
     public static void encounter(ServerLevel level,BlockPos pos,Set<UUID> participants) {
@@ -179,8 +179,8 @@ public final class QuestRevamp {
     }
     public static String status(ServerPlayer p,QuestId q) {
         if(QuestExpansion.handles(q))return QuestExpansion.status(p,q);
-        if(q==QuestId.SURVIVOR)return "Rewarded time: "+get(p,"rewarded_ticks")/1200+"m / 360m; bank: "+get(p,"credit")/10000+" weighted blocks; kill reward: "+get(p,"kills_half")/2.0+"; base: "+enduranceBase(p)+"; Untouchable: "+(get(p,"damage")==0)+"; window: "+QuestService.formatDuration(Math.max(0,WINDOW-(System.currentTimeMillis()-get(p,"started"))));
-        if(q==QuestId.CHALLENGER)return "Distinct spawners: "+get(p,"encounters")+"/"+QuestService.activeObjective(p,q).targetCount()+"; group bonus sum: "+get(p,"group_sum")+"%";
+        if(q==QuestId.SURVIVOR)return "Active time credited: "+get(p,"rewarded_ticks")/1200+"m / 360m\nHostile bonus: "+get(p,"kills_half")/2.0+" Reputation\nUntouchable bonus: "+(get(p,"damage")==0?"intact":"lost")+"\nTime remaining: "+QuestService.formatDuration(Math.max(0,WINDOW-(System.currentTimeMillis()-get(p,"started"))));
+        if(q==QuestId.CHALLENGER)return "Distinct spawners: "+get(p,"encounters")+"/"+QuestService.activeObjective(p,q).targetCount()+"; group reward earned: +"+(8*get(p,"group_sum")/100)+(side(p,q)>0?" Reputation":" Infamy");
         return "";
     }
 }

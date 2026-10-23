@@ -24,26 +24,26 @@ public final class KicAdminCommands {
         source.sendFailure(Component.literal(text)); return 0;
     }
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(admin("history")
+        dispatcher.getRoot().getChild("kd").addChild(admin("history")
             .then(Commands.literal("world")
                 .executes(c -> history(c.getSource(), null, 1))
                 .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(c -> history(c.getSource(), null, IntegerArgumentType.getInteger(c,"page")))))
             .then(Commands.argument("player", EntityArgument.player())
                 .executes(c -> history(c.getSource(), EntityArgument.getPlayer(c,"player"),1))
-                .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(c -> history(c.getSource(), EntityArgument.getPlayer(c,"player"),IntegerArgumentType.getInteger(c,"page"))))));
+                .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(c -> history(c.getSource(), EntityArgument.getPlayer(c,"player"),IntegerArgumentType.getInteger(c,"page"))))).build());
         var apply = Commands.argument("player", EntityArgument.player());
         for (String type : List.of("karma", "reputation", "infamy", "all"))
             apply.then(Commands.literal(type).executes(c -> decay(c.getSource(),EntityArgument.getPlayer(c,"player"),type)));
-        dispatcher.register(admin("decay")
+        dispatcher.getRoot().getChild("kd").addChild(admin("decay")
             .then(Commands.literal("preview").then(Commands.argument("player",EntityArgument.player()).executes(c -> tell(c.getSource(),KarmaService.decayPreview(EntityArgument.getPlayer(c,"player"))))))
-            .then(Commands.literal("apply").then(apply)));
+            .then(Commands.literal("apply").then(apply)).build());
         var world = admin("worldprogress").then(Commands.literal("check").executes(c -> tell(c.getSource(), CommunityProgressionService.get(c.getSource().getServer()).debugSummary())));
         for (String operation : List.of("add","remove","set")) world.then(Commands.literal(operation)
             .then(Commands.argument("amount",IntegerArgumentType.integer(0)).executes(c -> pool(c.getSource(),operation,IntegerArgumentType.getInteger(c,"amount")))));
         world.then(Commands.literal("stage").then(Commands.argument("stage",IntegerArgumentType.integer(0,5))
             .then(Commands.argument("threshold",IntegerArgumentType.integer(0)).executes(c -> threshold(c.getSource(),IntegerArgumentType.getInteger(c,"stage"),IntegerArgumentType.getInteger(c,"threshold"))))));
-        dispatcher.register(world);
-        var sigil = dispatcher.getRoot().getChild("sigil");
+        dispatcher.getRoot().getChild("kd").addChild(world.build());
+        var sigil = dispatcher.getRoot().getChild("kd").getChild("sigil");
         if (sigil != null) {
             var target = sigil.getRedirect() == null ? sigil : sigil.getRedirect();
             target.addChild(Commands.literal("inspect").then(Commands.argument("player",EntityArgument.player()).executes(c -> {
@@ -51,7 +51,7 @@ public final class KicAdminCommands {
                 return tell(c.getSource(),"Sigils for "+p.getName().getString()+"\n"+CurseBlessingService.slotSummary(p)+"\n"+CurseBlessingService.sigilDetails(p));
             })).build());
         }
-        var quest=dispatcher.getRoot().getChild("quest");
+        var quest=dispatcher.getRoot().getChild("kd").getChild("quest");
         quest.addChild(admin("clear").then(Commands.argument("player",EntityArgument.player()).executes(c -> {
             var p=EntityArgument.getPlayer(c,"player");QuestService.resetPlayer(c.getSource().getServer(),p);
             KicHistoryService.recordEvent(p,"Debug quest reset by "+c.getSource().getTextName());

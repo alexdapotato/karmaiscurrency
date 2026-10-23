@@ -25,6 +25,16 @@ public final class KicCycle {
     private static volatile MinecraftServer server;
     /** Temporary in-memory offset used only by the admin debug cycle command. */
     private static volatile long debugCycleOffset = 0L;
+    /**
+     * currentCycleId() is called from menus, quests and the shop. The cycle only changes every few
+     * hours, so a one-second cache (invalidated on config reload or clock change) avoids rebuilding
+     * zone and date objects on every call. The debug offset is applied outside the cache.
+     */
+    private static final long SNAPSHOT_TTL_MILLIS = 1000L;
+    private record CycleSnapshot(ShrineConfig config, long computedAtMillis, long expiresAtMillis, long cycleId) {}
+    private static volatile CycleSnapshot snapshot;
+    private record ZoneCache(String name, ZoneId zone) {}
+    private static volatile ZoneCache zoneCache;
 
     private KicCycle() {}
 
@@ -48,7 +58,14 @@ public final class KicCycle {
 
     /** Fixed local-time boundaries in the configured cycle timezone. */
     public static long currentCycleId() {
-        return cycleIdAt(ZonedDateTime.now(cycleZone())) + debugCycleOffset;
+        long now = System.currentTimeMillis();
+        ShrineConfig config = ShrineConfig.current();
+        CycleSnapshot cached = snapshot;
+        if (cached == null || cached.config() != config || now >= cached.expiresAtMillis() || now < cached.computedAtMillis()) {
+            cached = new CycleSnapshot(config, now, now + SNAPSHOT_TTL_MILLIS, cycleIdAt(ZonedDateTime.now(cycleZone())));
+            snapshot = cached;
+        }
+        return cached.cycleId() + debugCycleOffset;
     }
 
     /** Advances the in-memory debug cycle by one. It resets when the server restarts. */
@@ -84,11 +101,17 @@ public final class KicCycle {
     }
 
     public static ZoneId cycleZone() {
+        String name = ShrineConfig.current().shopCycleTimezone;
+        ZoneCache cached = zoneCache;
+        if (cached != null && cached.name().equals(name)) return cached.zone();
+        ZoneId zone;
         try {
-            return ZoneId.of(ShrineConfig.current().shopCycleTimezone);
+            zone = ZoneId.of(name);
         } catch (RuntimeException ignored) {
-            return ZoneId.of("Asia/Manila");
+            zone = ZoneId.of("Asia/Manila");
         }
+        zoneCache = new ZoneCache(name, zone);
+        return zone;
     }
 
     public static String statusLine() {

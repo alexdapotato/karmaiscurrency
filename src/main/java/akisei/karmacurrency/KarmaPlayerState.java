@@ -36,14 +36,33 @@ public final class KarmaPlayerState {
     }
 
     public static void set(ServerPlayer player, String key, long value) {
-        Map<String, Long> next = new HashMap<>(values(player));
+        Map<String, Long> current = values(player);
+        // Skip identical writes: they would copy the map and mark the attachment changed for nothing.
+        if (current.getOrDefault(key, 0L) == value) return;
+        Map<String, Long> next = new HashMap<>(current);
         if (value == 0L) next.remove(key);
         else next.put(key, value);
         player.setAttached(ATTACHMENT, Map.copyOf(next));
     }
 
+    /** Applies several changes with a single map copy and a single write. */
+    public static void update(ServerPlayer player, java.util.function.Consumer<Map<String, Long>> changes) {
+        Map<String, Long> current = values(player);
+        Map<String, Long> next = new HashMap<>(current);
+        changes.accept(next);
+        next.values().removeIf(v -> v == null || v == 0L);
+        if (next.equals(current)) return;
+        player.setAttached(ATTACHMENT, Map.copyOf(next));
+    }
+
     public static void clearPrefix(ServerPlayer player, String prefix) {
-        Map<String, Long> next = new HashMap<>(values(player));
+        Map<String, Long> current = values(player);
+        boolean any = false;
+        for (String key : current.keySet()) {
+            if (key.startsWith(prefix)) { any = true; break; }
+        }
+        if (!any) return;
+        Map<String, Long> next = new HashMap<>(current);
         next.keySet().removeIf(key -> key.startsWith(prefix));
         player.setAttached(ATTACHMENT, Map.copyOf(next));
     }

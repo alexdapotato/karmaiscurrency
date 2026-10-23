@@ -161,8 +161,7 @@ public final class CommunityProgressionService extends SavedData {
         int current = stage(player);
         if (current >= MAX_STAGE) return java.util.List.of("Maximum world stage reached.");
         int next = current + 1;
-        int cap = next < KarmaService.PERSONAL_KARMA_THRESHOLDS.length
-            ? KarmaService.PERSONAL_KARMA_THRESHOLDS[next] : ShrineConfig.current().karmaCap;
+        int cap = KarmaService.worldStageKarmaCap(next);
         cap = Math.min(cap, ShrineConfig.current().karmaCap);
         int override = KarmaPlayerState.getInt(player, "karma_cap_override");
         if (override > 0) cap = Math.min(cap, override);

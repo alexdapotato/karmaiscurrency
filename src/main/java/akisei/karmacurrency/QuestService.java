@@ -77,7 +77,7 @@ public final class QuestService {
         HUNT("hunt", Type.TRIAL, "The Hunt", Items.COMPASS,
             "Participate separately as the Hunted or an eligible Hunter.", "Hunt-specific rewards; participation does not use the normal Quest slot."),
         OFFERING("offering", Type.TRIAL, "Trial of Offering", Items.GOLD_INGOT,
-            "Submit and consume the selected accepted items.", "95% of bundle value plus difficulty bonus and signed Karma."),
+            "Submit and consume the selected accepted items.", "Receive influence based on the offered items, plus a difficulty bonus and Karma toward your accepted alignment."),
         SURVIVOR("survivor", Type.TRIAL, "Endurance", Items.CLOCK,
             "Explore and survive during a 12-hour window.", "Movement-gated online time and eligible hostile kills; Untouchable bonus."),
         BLOOD_PRICE("blood_price", Type.CONTRACT, "Blood Price", Items.IRON_SWORD,
@@ -90,7 +90,7 @@ public final class QuestService {
         WARDEN("warden", Type.CONTRACT, "The Warden", Items.SCULK_SHRIEKER,
             "Kill a Warden.", "High-difficulty Warden contract reward is configurable."),
         PILGRIMAGE("pilgrimage", Type.TRIAL, "Pilgrimage", Items.COMPASS, "Submit compasses bound to different valid shrines.", "24-64 Reputation and 15 Karma."),
-        CHALLENGER("challenger", Type.TRIAL, "Challenger", Items.TRIAL_KEY, "Complete 4–18 distinct Trial Spawners.", "8 social currency and 2 signed Karma per spawner, plus group bonus."),
+        CHALLENGER("challenger", Type.TRIAL, "Challenger", Items.TRIAL_KEY, "Complete 4–18 distinct Trial Spawners.", "8 influence and 2 Karma toward your accepted alignment per spawner, plus a group reward."),
         DUEL("duel", Type.CONTRACT, "Duel", Items.IRON_SWORD,
             "Explicitly agree to a designated player duel.", "Only the winner receives the configured Duel reward."),
         HIDDEN_BLUE("hidden_in_the_blue", Type.TRIAL, "Hidden in the Blue", Items.FISHING_ROD,
@@ -285,7 +285,7 @@ public final class QuestService {
     }
 
     public static boolean canAccept(ServerPlayer player, QuestId quest) {
-        if (quest == null || quest == QuestId.DUEL) return false;
+        if (quest == null || quest == QuestId.DUEL || quest == QuestId.COURAGE) return false;
         if (!QuestExpansion.stageAllows(quest,CommunityProgressionService.stage(player))) return false;
         if (quest == QuestId.HUNT) return canBecomeHunted(player) || canJoinHunt(player);
         if (quest != QuestId.DUEL && !KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)) return false;
@@ -332,6 +332,7 @@ public final class QuestService {
     public static String alignmentBlockReason(ServerPlayer player, QuestId quest) {
         if (player == null || quest == null) return "";
         if (quest == QuestId.DUEL) return "Duels are currently unavailable.";
+        if (quest == QuestId.COURAGE) return "Courage has been retired.";
         if (SocialCurrencyService.getStance(player) == SocialCurrencyService.Stance.NEUTRAL) return "Neutral players cannot access Trials or Contracts.";
         if (quest == QuestId.HUNT) return "";
         return QuestService.alignmentCode(player)==QuestRevamp.side(player,quest)?"":"Quest paused: return to its accepted alignment. Timers continue.";
@@ -455,6 +456,7 @@ public final class QuestService {
     public static String acceptanceBlockReason(ServerPlayer player, QuestId quest) {
         if (quest == null) return "That quest does not exist.";
         if (quest == QuestId.DUEL) return "Duels are currently unavailable.";
+        if (quest == QuestId.COURAGE) return "Courage has been retired.";
         if (!QuestRevamp.available(player,quest,activeObjective(player,quest))) return quest==QuestId.SURVIVOR?"Endurance may be started once per 12 hours.":"This objective has reached its completion limit for this cycle.";
         if (quest == QuestId.DUEL && !KarmaGameRules.enabled(player, KarmaGameRules.DUELS_ENABLED)) {
             return "Duels are currently disabled by the duels_enabled gamerule.";
@@ -1299,13 +1301,6 @@ public final class QuestService {
             || id.endsWith("_leggings") || id.endsWith("_boots");
     }
 
-    private static boolean isWeapon(ItemStack stack) {
-        if (stack.isEmpty()) return false;
-        String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        return id.endsWith("_sword") || id.endsWith("_axe") || id.endsWith("_bow")
-            || id.endsWith("_crossbow") || id.endsWith("_trident") || id.endsWith("_mace");
-    }
-
     private static void enforceBonusEquipment(ServerPlayer player, QuestId quest) {
         if (selectedBonus(player,quest)==2 && !player.getItemBySlot(EquipmentSlot.CHEST).isEmpty())
             KarmaPlayerState.set(player,BONUS_FAILED_PREFIX+quest.id(),1);
@@ -1317,13 +1312,35 @@ public final class QuestService {
         if (!player.getInventory().add(stashed)) player.drop(stashed, false);
     }
 
+    private static final int QUEST_TICK_INTERVAL = 10;
+    private static final java.util.Set<java.util.UUID> MIGRATED_PLAYERS = new java.util.HashSet<>();
+    private static java.lang.ref.WeakReference<MinecraftServer> migratedServer = new java.lang.ref.WeakReference<>(null);
+
     /** Tick quest timers; sampling and submission run through the shared server rules. */
     public static void tick(MinecraftServer server) {
         if(server==null)return;
-        if(server.getTickCount()%200==0)QuestRevamp.pruneSamples(server.getPlayerList().getPlayers());
-        for(ServerPlayer player:server.getPlayerList().getPlayers()) {
-            QuestRevamp.migrate(player);
-            QuestExpansion.migrate(player);
+        long tickCount=server.getTickCount();
+        var players=server.getPlayerList().getPlayers();
+        // A different server instance (e.g. switching singleplayer worlds) must re-run migrations.
+        if(migratedServer.get()!=server){MIGRATED_PLAYERS.clear();migratedServer=new java.lang.ref.WeakReference<>(server);}
+        if(tickCount%200==0){
+            QuestRevamp.pruneSamples(players);
+            java.util.Set<java.util.UUID> online=new java.util.HashSet<>();
+            for(ServerPlayer player:players)online.add(player.getUUID());
+            MIGRATED_PLAYERS.retainAll(online);
+        }
+        // Migrations only need to run once per player session, not every tick.
+        for(ServerPlayer player:players) {
+            if(MIGRATED_PLAYERS.add(player.getUUID())) {
+                QuestRevamp.migrate(player);
+                QuestExpansion.migrate(player);
+            }
+        }
+        // Quest checks do not need tick precision: every 10 ticks (0.5 s) keeps timers,
+        // Courage structure detection and bonus enforcement responsive. 200 is a multiple of 10,
+        // so Survivor's 200-tick sampling still lines up.
+        if(tickCount%QUEST_TICK_INTERVAL!=0)return;
+        for(ServerPlayer player:players) {
             QuestId quest=activeQuest(player);
             if(quest==null)continue;
             if(quest==QuestId.DUEL){cancelDuel(player);continue;}

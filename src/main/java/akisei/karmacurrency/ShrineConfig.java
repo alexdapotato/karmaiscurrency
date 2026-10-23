@@ -135,6 +135,11 @@ public final class ShrineConfig {
 			}
 			Properties defaults = defaultProperties();
 			boolean changed = migrateConfig(properties);
+            if(!properties.containsKey("sigils.revamp10")) {
+                if(properties.getProperty("karma.cap","1000").equals("1000"))properties.setProperty("karma.cap","1500");
+                properties.setProperty("sigils.revamp10","true");
+                changed=true;
+            }
 			for (String key : defaults.stringPropertyNames()) {
 				if (!properties.containsKey(key)) {
 					properties.setProperty(key, defaults.getProperty(key));
@@ -184,7 +189,7 @@ public final class ShrineConfig {
 			getInt(properties, "karma.playerKillMax", 25, 0, 100000),
 			getInt(properties, "karma.playerKillVictimBonusDivisor", 5, 1, 100000),
 			getInt(properties, "karma.playerKillCooldownMinutes", 30, 0, 1000000),
-			getInt(properties, "karma.cap", 1000, 1, 1000000),
+			getInt(properties, "karma.cap", 1500, 1, 1000000),
 			getInt(properties, "karma.heartThreshold", 75, 1, 1000000),
 			getInt(properties, "karma.maxBonusHalfHearts", 10, 0, 10),
 			getInt(properties, "karma.decayIntervalMinutes", 360, 1, 1000000),
@@ -231,7 +236,7 @@ public final class ShrineConfig {
 	private static ShrineConfig defaults() {
 		return new ShrineConfig(true, true, 1000, 100, 8, 20, 500, 10000, 64,
 			45, 35, 20, 128, 1, 12, 4, 30, 30, 5, 10, 25, 5, 30,
-			1000, 75, 10, 360, 5, 120, 0, 120, 0, 125, 100, 75, 30,
+			1500, 75, 10, 360, 5, 120, 0, 120, 0, 125, 100, 75, 30,
 			2, 1, 5, 80, 80, 10, 25, 10, 25, 10, 100, 100, 100, 0, 12,
 			"Asia/Manila",
 			25, 50, 10, 60, 30, 60, 50, 100,
@@ -248,7 +253,7 @@ public final class ShrineConfig {
 		p.setProperty("shrines.lightWeight", "45"); p.setProperty("shrines.neutralWeight", "35"); p.setProperty("shrines.darkWeight", "20"); p.setProperty("shrines.minimumDistance", "128");
 		p.setProperty("karma.trade", "1"); p.setProperty("karma.tradeBatch", "12"); p.setProperty("karma.cureZombieVillager", "4"); p.setProperty("karma.enderDragon", "30"); p.setProperty("karma.wither", "30");
 		p.setProperty("karma.villagerKill", "5"); p.setProperty("karma.playerKillBase", "10"); p.setProperty("karma.playerKillMax", "25"); p.setProperty("karma.playerKillVictimBonusDivisor", "5"); p.setProperty("karma.playerKillCooldownMinutes", "30");
-				p.setProperty("karma.cap", "1000"); p.setProperty("karma.heartThreshold", "75"); p.setProperty("karma.maxBonusHalfHearts", "10"); p.setProperty("karma.decayIntervalMinutes", "360"); p.setProperty("karma.decayPercent", "5");
+				p.setProperty("karma.cap", "1500"); p.setProperty("karma.heartThreshold", "75"); p.setProperty("karma.maxBonusHalfHearts", "10"); p.setProperty("karma.decayIntervalMinutes", "360"); p.setProperty("karma.decayPercent", "5");
 		p.setProperty("social.reputationDecayIntervalMinutes", "240"); p.setProperty("social.reputationDecayPercent", "5");
 		p.setProperty("social.infamyDecayIntervalMinutes", "240"); p.setProperty("social.infamyDecayPercent", "5");
 		p.setProperty("social.alignedGainPercent", "125"); p.setProperty("social.neutralGainPercent", "100"); p.setProperty("social.opposedGainPercent", "75"); p.setProperty("social.diminishingReturnWindowMinutes", "30"); p.setProperty("social.tradeGain", "2"); p.setProperty("social.villagerKillGain", "1"); p.setProperty("social.cureGain", "5"); p.setProperty("social.enderDragonGain", "80"); p.setProperty("social.witherGain", "80");

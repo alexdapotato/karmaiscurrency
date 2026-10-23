@@ -19,57 +19,43 @@ public final class KarmaCommands {
 	private KarmaCommands() {
 	}
 
-	public static void register() {
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-			dispatcher.register(
-				Commands.literal("karma")
-					.executes(context -> showBalance(context.getSource(), context.getSource().getPlayerOrException()))
-				.then(Commands.literal("infamy")
-						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-						.then(Commands.literal("add").then(infamyNode("add")))
-						.then(Commands.literal("remove").then(infamyNode("remove")))
-						.then(Commands.literal("set").then(infamyNode("set"))))
-					.then(Commands.literal("reputation")
-						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-						.then(Commands.literal("add").then(reputationNode("add")))
-						.then(Commands.literal("remove").then(reputationNode("remove")))
-						.then(Commands.literal("set").then(reputationNode("set"))))
-					.then(questsCommand())
-					.then(Commands.literal("reload")
-						.requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-						.executes(context -> reload(context.getSource())))
-			);
+    public static void register() {
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(Commands.literal("karma")
+                .executes(c->showBalance(c.getSource(),c.getSource().getPlayerOrException()))
+                .then(questsCommand()));
             dispatcher.register(Commands.literal("quest")
-                .executes(context -> questStatus(context.getSource()))
-                .then(Commands.literal("submit").executes(context -> QuestRevamp.submit(context.getSource().getPlayerOrException(),false)?1:0)
-                    .then(Commands.literal("confirm").executes(context -> QuestRevamp.submit(context.getSource().getPlayerOrException(),true)?1:0))));
+                .executes(c->questStatus(c.getSource()))
+                .then(Commands.literal("submit").executes(c->QuestRevamp.submit(c.getSource().getPlayerOrException(),false)?1:0)
+                    .then(Commands.literal("confirm").executes(c->QuestRevamp.submit(c.getSource().getPlayerOrException(),true)?1:0))));
             dispatcher.register(Commands.literal("choose")
-                .then(Commands.literal("light").executes(c -> chooseAlignment(c.getSource(), SocialCurrencyService.Stance.LIGHT)))
-                .then(Commands.literal("dark").executes(c -> chooseAlignment(c.getSource(), SocialCurrencyService.Stance.DARK))));
-            // Keep existing functionality, but expose concise operator-gated paths.
-            var admin = debugCommand().build();
-            var karma = dispatcher.getRoot().getChild("karma");
-            for (var child : admin.getChildren()) {
-                var secured = operatorNode(child);
-                karma.addChild(secured);
-                String alias = switch (child.getName()) {
-                    case "reputation" -> "rep";
-                    case "infamy", "sigil", "token", "commitment", "hunt", "rotation", "endurance", "challenger", "reward" -> child.getName();
-                    default -> null;
-                };
-                if (alias != null) dispatcher.register(Commands.literal(alias)
-                    .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-                    .executes(child.getCommand() == null ? c -> { c.getSource().sendFailure(Component.literal("Choose a subcommand.")); return 0; } : child.getCommand())
-                    .redirect(secured));
-                if (child.getName().equals("quest")) {
-                    var quest = dispatcher.getRoot().getChild("quest");
-                    for (var sub : child.getChildren()) quest.addChild(operatorNode(sub));
-                }
+                .then(Commands.literal("light").executes(c->chooseAlignment(c.getSource(),SocialCurrencyService.Stance.LIGHT)))
+                .then(Commands.literal("dark").executes(c->chooseAlignment(c.getSource(),SocialCurrencyService.Stance.DARK))));
+            dispatcher.register(Commands.literal("kd")
+                .requires(source->source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                .executes(c->debugHelp(c.getSource()))
+                .then(Commands.literal("help").executes(c->debugHelp(c.getSource())))
+                .then(Commands.literal("reload").executes(c->reload(c.getSource()))));
+            var kd=dispatcher.getRoot().getChild("kd");
+            for(var child:debugCommand().build().getChildren()) {
+                if(child.getName().equals("reputation")) {
+                    var rep=Commands.literal("rep");
+                    for(var sub:child.getChildren())rep.then(sub);
+                    kd.addChild(rep.build());
+                } else kd.addChild(child);
             }
             KicAdminCommands.register(dispatcher);
-
-		});
-	}
+        });
+    }
+    private static int debugHelp(CommandSourceStack source) {
+        var text=KicUiText.panel("KIC Developer Tools");
+        text.append(KicUiText.line("Player", "check · info · add/remove/set · limit · reset", net.minecraft.ChatFormatting.AQUA));
+        text.append(KicUiText.line("Economy", "rep · infamy · token · decay · worldprogress", net.minecraft.ChatFormatting.GOLD));
+        text.append(KicUiText.line("Testing", "sigil · commitment · quest · hunt · trigger", net.minecraft.ChatFormatting.LIGHT_PURPLE));
+        text.append(KicUiText.line("Inspect", "rotation · endurance · challenger · reward · history · shrine", net.minecraft.ChatFormatting.WHITE));
+        text.append(KicUiText.line("Usage", "/kd <group> — use Tab for actions and arguments", net.minecraft.ChatFormatting.YELLOW));
+        source.sendSuccess(()->text,false);return 1;
+    }
 
     private static com.mojang.brigadier.tree.CommandNode<CommandSourceStack> operatorNode(com.mojang.brigadier.tree.CommandNode<CommandSourceStack> node) {
         var builder = node.createBuilder().requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER));
@@ -77,37 +63,29 @@ public final class KarmaCommands {
         return builder.build();
     }
 
-	private static int questStatus(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-		ServerPlayer player = source.getPlayerOrException();
-		QuestService.QuestId active = QuestService.activeQuest(player);
-		String activeLine = active == null ? "Active quest: none (0/1)."
-			: "Active quest: " + active.displayName() + " (1/1).\nObjective: "
-				+ QuestService.objectiveDescription(player, active) + "\nBonus: "
-				+ QuestService.bonusDescription(player, active) + "\nProgress: " + QuestService.status(player, active);
-		SocialCurrencyService.Stance stance = SocialCurrencyService.getStance(player);
-		String pools = switch (stance) {
-			case NEUTRAL -> "Trials and Contracts are unavailable while Neutral.";
-			case LIGHT -> "Available alignment: Trials.";
-			case DARK -> "Available alignment: Contracts.";
-		};
-		String message = activeLine
-			+ "\n" + QuestService.generalCooldownStatus(player)
-			+ "\n" + QuestService.perQuestCooldownStatus(player)
-			+ "\n" + pools
-			+ "\nCurrent cycle: shared KIC shop cycle."
-			+ "\n" + QuestService.nextCycleStatus();
-		if (!KarmaGameRules.enabled(player, KarmaGameRules.QUESTS_ENABLED)) {
-			message = "Quests are disabled by the quests_enabled gamerule. Trials, Contracts, and The Hunt are unavailable.\n"
-				+ (active == QuestService.QuestId.DUEL ? activeLine + "\n" : "")
-				+ (KarmaGameRules.enabled(player, KarmaGameRules.DUELS_ENABLED)
-					? "Duels remain controlled independently by duels_enabled.\n" : "");
-		}
-		ServerPlayer challenger = QuestService.pendingDuelChallenger(player);
-		if (challenger != null) message += "\nDuel invitation from: " + challenger.getName().getString() + ". Use /quest duel accept " + challenger.getName().getString() + " or /quest duel decline " + challenger.getName().getString() + ".";
-		String statusMessage = message;
-		source.sendSuccess(() -> Component.literal(statusMessage), false);
-		return Command.SINGLE_SUCCESS;
-	}
+    private static int questStatus(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer p=source.getPlayerOrException();
+        var active=QuestService.activeQuest(p);
+        var text=KicUiText.panel("Your Quest");
+        if(!KarmaGameRules.enabled(p,KarmaGameRules.QUESTS_ENABLED)) {
+            text.append(KicUiText.line("Status","Quests are currently disabled.",net.minecraft.ChatFormatting.RED));
+        } else if(active==null) {
+            text.append(KicUiText.line("Active quest","None",net.minecraft.ChatFormatting.WHITE));
+            text.append(KicUiText.line("Next step",SocialCurrencyService.getStance(p)==SocialCurrencyService.Stance.NEUTRAL
+                ?"Trials and Contracts are unavailable while Neutral.":"Visit a shrine to choose a quest.",net.minecraft.ChatFormatting.YELLOW));
+        } else {
+            text.append(KicUiText.line("Quest",active.displayName(),net.minecraft.ChatFormatting.GOLD));
+            text.append(KicUiText.line("Objective",QuestService.objectiveDescription(p,active),net.minecraft.ChatFormatting.WHITE));
+            text.append(KicUiText.line("Progress",QuestService.status(p,active),net.minecraft.ChatFormatting.AQUA));
+            text.append(KicUiText.line("Reward",QuestService.rewardDescription(p,active),net.minecraft.ChatFormatting.GREEN));
+            text.append(KicUiText.line("Bonus",QuestService.bonusDescription(p,active),net.minecraft.ChatFormatting.LIGHT_PURPLE));
+            String blocked=QuestService.alignmentBlockReason(p,active);
+            if(!blocked.isBlank())text.append(KicUiText.line("Paused",blocked,net.minecraft.ChatFormatting.RED));
+            if(QuestRevamp.usesSubmission(active))text.append(KicUiText.line("Submit","/quest submit — review your items and reward",net.minecraft.ChatFormatting.YELLOW));
+        }
+        text.append(KicUiText.line("Rotation",QuestService.nextCycleStatus(),net.minecraft.ChatFormatting.GRAY));
+        source.sendSuccess(()->text,false);return 1;
+    }
 
 	private static int duelInvite(CommandSourceStack source, ServerPlayer opponent) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
 		QuestService.inviteDuel(source.getPlayerOrException(), opponent);
@@ -447,14 +425,15 @@ public final class KarmaCommands {
 					IntegerArgumentType.getInteger(context, "amount"), target)));
 	}
 
-	private static int showBalance(CommandSourceStack source, ServerPlayer player) {
-		source.sendSuccess(() -> Component.literal(
-			"Karma: " + KarmaService.format(KarmaService.get(player))
-				+ "\nReputation: " + SocialCurrencyService.getReputation(player)
-				+ "\nInfamy: " + KarmaService.getInfamyPoints(player)
-				+ "\nInfluence Tokens: " + SocialTokenService.count(player)), false);
-		return Command.SINGLE_SUCCESS;
-	}
+    private static int showBalance(CommandSourceStack source, ServerPlayer player) {
+        var text=KicUiText.panel("Your Karma");
+        text.append(KicUiText.line("Alignment",KicUiText.alignmentStatus(player),net.minecraft.ChatFormatting.WHITE));
+        text.append(KicUiText.line("Karma",KarmaService.format(KarmaService.get(player))+" / ±"+KarmaService.format(KarmaService.currentCap(player)),net.minecraft.ChatFormatting.AQUA));
+        text.append(KicUiText.line("Reputation",Integer.toString(SocialCurrencyService.getReputation(player)),net.minecraft.ChatFormatting.GOLD));
+        text.append(KicUiText.line("Infamy",Integer.toString(KarmaService.getInfamyPoints(player)),net.minecraft.ChatFormatting.LIGHT_PURPLE));
+        text.append(KicUiText.line("Physical Influence",Integer.toString(SocialTokenService.count(player)),net.minecraft.ChatFormatting.YELLOW));
+        source.sendSuccess(()->text,false);return 1;
+    }
 
 	private static int openShop(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
 		ServerPlayer player = source.getPlayerOrException();
@@ -766,7 +745,7 @@ public final class KarmaCommands {
 		int before = KarmaService.get(player);
 		int beforeInfamy = KarmaService.getInfamyPoints(player);
 		switch (event) {
-			case "trade" -> KarmaService.recordVillagerTrade(player);
+			case "trade" -> KicMessages.transaction(player,"Debug trade",()->{KarmaService.recordVillagerTrade(player);return true;});
 			case "cure" -> KarmaService.awardAlignedEvent(player, "cure", 0, "DEBUG: cure");
 			case "villager_kill" -> KarmaService.awardAlignedEvent(player, "villager_kill", 0, "DEBUG: villager_kill");
 			case "ender_dragon" -> KarmaService.awardAlignedEvent(player, "ender_dragon", ShrineConfig.current().socialEnderDragonGain, "DEBUG: ender_dragon");

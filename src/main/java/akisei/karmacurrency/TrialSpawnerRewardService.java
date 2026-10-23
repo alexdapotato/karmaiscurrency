@@ -29,7 +29,8 @@ public final class TrialSpawnerRewardService {
         for (UUID id : Set.copyOf(participants)) {
             ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
             if (player == null || player.level() != level || !player.isAlive()
-                    || player.isSpectator() || player.isCreative()) continue;
+                    || player.isSpectator() || player.isCreative()
+                    || player.distanceToSqr(position.getX()+.5,position.getY()+.5,position.getZ()+.5)>2500) continue;
             if (!claimCooldown(player, key, level.getGameTime())) continue;
             KarmaService.awardAlignedEvent(player, "trial_spawner", 0, "completing a Trial Spawner encounter");
         }

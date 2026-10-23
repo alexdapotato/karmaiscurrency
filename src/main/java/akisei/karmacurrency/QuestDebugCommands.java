@@ -42,11 +42,11 @@ public final class QuestDebugCommands {
                 return tell(c.getSource(),out.toString());
             })))
             .then(Commands.literal("assign").then(Commands.argument("player",EntityArgument.player())
-                .then(Commands.argument("quest",StringArgumentType.word()).suggests((c,b)->{for(var q:QuestService.QuestId.values())if(q!=QuestService.QuestId.DUEL)b.suggest(q.id());return b.buildFuture();}).then(Commands.argument("objective",StringArgumentType.word()).suggests((c,b)->{var q=QuestService.QuestId.byId(StringArgumentType.getString(c,"quest"));if(q!=null)for(var o:QuestObjectiveCatalog.objectives(q))b.suggest(o.key());return b.buildFuture();}).executes(c->{
+                .then(Commands.argument("quest",StringArgumentType.word()).suggests((c,b)->{for(var q:QuestService.QuestId.values())if(q!=QuestService.QuestId.DUEL && q!=QuestService.QuestId.COURAGE)b.suggest(q.id());return b.buildFuture();}).then(Commands.argument("objective",StringArgumentType.word()).suggests((c,b)->{var q=QuestService.QuestId.byId(StringArgumentType.getString(c,"quest"));if(q!=null)for(var o:QuestObjectiveCatalog.objectives(q))b.suggest(o.key());return b.buildFuture();}).executes(c->{
                     ServerPlayer p=EntityArgument.getPlayer(c,"player");var q=QuestService.QuestId.byId(StringArgumentType.getString(c,"quest"));
                     String objective=StringArgumentType.getString(c,"objective");
                     boolean ok=QuestService.debugAssign(p,q,objective);if(ok)audit(c.getSource(),"assign "+q+"/"+objective,p);
-                    return ok ? tell(c.getSource(),"Quest assigned. Payout held until /quest payout <player>.") : fail(c.getSource(),"Cannot assign: check quest/objective ID, alignment, rules, active slot or objective limit.");
+                    return ok ? tell(c.getSource(),"Quest assigned. Payout held until /kd quest payout <player>.") : fail(c.getSource(),"Cannot assign: check quest/objective ID, alignment, rules, active slot or objective limit.");
                 })))) )
             .then(Commands.literal("progress").then(Commands.argument("player",EntityArgument.player()).then(Commands.argument("amount",IntegerArgumentType.integer(0,1000000)).executes(c->{
                 ServerPlayer p=EntityArgument.getPlayer(c,"player");var q=QuestService.activeQuest(p);if(q==null)return fail(c.getSource(),"This player has no active quest.");
@@ -58,7 +58,7 @@ public final class QuestDebugCommands {
                 else if(QuestService.activeObjective(p,q).kind()==QuestObjectiveCatalog.Kind.KILL||q==QuestService.QuestId.BLOOD_PRICE)KarmaPlayerState.set(p,"quest_progress_"+q.id(),n);
                 else return fail(c.getSource(),"Progress overrides support kills, Challenger spawners, Endurance minutes, Mercy cures and fishing catches.");
                 QuestRevamp.put(p,"debug_hold",1);audit(c.getSource(),"progress "+n,p);
-                return tell(c.getSource(),"Progress set; automatic payout held. Use /quest payout <player> to explicitly claim, or cancel to discard.");
+                return tell(c.getSource(),"Progress set; automatic payout held. Use /kd quest payout <player> to explicitly claim, or cancel to discard.");
             }))))
             .then(Commands.literal("expire").then(Commands.argument("player",EntityArgument.player()).executes(c->{
                 ServerPlayer p=EntityArgument.getPlayer(c,"player");var q=QuestService.activeQuest(p);
@@ -75,7 +75,7 @@ public final class QuestDebugCommands {
             })))
             .then(Commands.literal("payout").then(Commands.argument("player",EntityArgument.player()).executes(c->{
                 ServerPlayer p=EntityArgument.getPlayer(c,"player");var q=QuestService.activeQuest(p);if(q==null)return fail(c.getSource(),"This player has no active quest.");
-                QuestRevamp.put(p,"debug_hold",0);boolean ok=QuestService.complete(p,q);if(!ok)QuestRevamp.put(p,"debug_hold",1);
+                QuestRevamp.put(p,"debug_hold",0);boolean ok=KicMessages.transaction(p,"Debug quest payout",()->QuestService.complete(p,q));if(!ok)QuestRevamp.put(p,"debug_hold",1);
                 audit(c.getSource(),"payout "+ok,p);return ok ? tell(c.getSource(),"Reward claimed once.") : fail(c.getSource(),"Requirements or alignment not met. Payout remains held.");
             })))
             .then(Commands.literal("reset").then(Commands.argument("player",EntityArgument.player()).then(Commands.argument("objective",StringArgumentType.word()).suggests((c,b)->{for(var q:QuestService.QuestId.values())for(var o:QuestObjectiveCatalog.objectives(q))b.suggest(QuestRevamp.identity(q,o));return b.buildFuture();}).executes(c->{
@@ -86,7 +86,7 @@ public final class QuestDebugCommands {
                     if(q==QuestService.QuestId.HIDDEN_BLUE){QuestRevamp.put(p,"blue_attempt_cycle",0);QuestRevamp.put(p,"blue_next_cycle",0);}
                     audit(c.getSource(),"reset "+id,p);return tell(c.getSource(),"Reset only "+id+". No currency changed.");
                 }
-                return fail(c.getSource(),"Unknown objective identity. Use /quest limits <player>.");
+                return fail(c.getSource(),"Unknown objective identity. Use /kd quest limits <player>.");
             }))));
     }
 }

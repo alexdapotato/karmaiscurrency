@@ -93,7 +93,7 @@ public final class KarmaConversionMenu extends KarmaMenu {
 			int created = source == SocialCurrencyService.RedemptionTarget.REPUTATION
 				? SocialCurrencyService.materializeReputation(player, amount)
 				: SocialCurrencyService.materializeInfamy(player, amount);
-			if (created <= 0) player.sendSystemMessage(Component.literal("Not enough social currency to materialize."));
+			if (created <= 0) player.sendSystemMessage(Component.literal("Not enough influence to materialize."));
 		} else {
 			int gained = SocialCurrencyService.redeem(player, amount, source);
 			if (gained <= 0) player.sendSystemMessage(Component.literal("Those tokens cannot be redeemed into the selected currency with your current stance."));

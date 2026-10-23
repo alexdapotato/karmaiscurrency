@@ -15,13 +15,23 @@ public final class KicUiText {
     }
     public static net.minecraft.network.chat.Component title(String text) {
         return net.minecraft.network.chat.Component.literal(text.replace('\n', ' '))
-            .withStyle(style -> style.withItalic(false).withColor(net.minecraft.ChatFormatting.WHITE));
+            .withStyle(style -> style.withItalic(false).withColor(net.minecraft.ChatFormatting.GOLD).withBold(true));
+    }
+    public static net.minecraft.network.chat.MutableComponent panel(String heading) {
+        return net.minecraft.network.chat.Component.literal(heading).withStyle(net.minecraft.ChatFormatting.GOLD, net.minecraft.ChatFormatting.BOLD);
+    }
+    public static net.minecraft.network.chat.MutableComponent line(String label, String value, net.minecraft.ChatFormatting color) {
+        return net.minecraft.network.chat.Component.literal("\n"+label+": ").withStyle(style->style.withColor(net.minecraft.ChatFormatting.GRAY).withBold(false))
+            .append(net.minecraft.network.chat.Component.literal(value).withStyle(style->style.withColor(color).withBold(false)));
     }
     public static java.util.List<net.minecraft.network.chat.Component> lore(String... lines) {
         var result = new java.util.ArrayList<net.minecraft.network.chat.Component>();
         for (String value : lines) for (String line : value.split("\\n", -1)) {
             var color = line.startsWith("Missing:") || line.startsWith("Unavailable:") ? net.minecraft.ChatFormatting.RED
-                : line.startsWith("Ready:") ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.GRAY;
+                : line.startsWith("Ready:") || line.startsWith("Reward:") ? net.minecraft.ChatFormatting.GREEN
+                : line.startsWith("Progress:") || line.startsWith("Karma:") ? net.minecraft.ChatFormatting.AQUA
+                : line.startsWith("Reputation:") ? net.minecraft.ChatFormatting.GOLD
+                : line.startsWith("Infamy:") ? net.minecraft.ChatFormatting.LIGHT_PURPLE : net.minecraft.ChatFormatting.GRAY;
             StringBuilder current = new StringBuilder();
             for (String word : line.split(" ")) {
                 if (current.length() > 0 && current.length() + word.length() + 1 > 44) {
@@ -34,6 +44,17 @@ public final class KicUiText {
             result.add(net.minecraft.network.chat.Component.literal(current.toString()).withStyle(st -> st.withItalic(false).withColor(color)));
         }
         return result;
+    }
+    /** Bedrock forms understand legacy section colors; every line resets its style. */
+    public static String formText(String text) {
+        return java.util.Arrays.stream(text.split("\\n",-1)).map(line->{
+            if(line.startsWith("§"))return line;
+            String color=line.startsWith("Missing:")||line.startsWith("Unavailable:")?"§c"
+                :line.startsWith("Ready:")||line.startsWith("Reward:")?"§a"
+                :line.startsWith("Karma:")||line.startsWith("Progress:")?"§b"
+                :line.startsWith("Reputation:")?"§6":line.startsWith("Infamy:")?"§d":"§7";
+            return color+line+"§r";
+        }).collect(java.util.stream.Collectors.joining("\n"));
     }
     public static String durationSeconds(long seconds) {
         long safe = Math.max(0L, seconds);
@@ -66,21 +87,24 @@ public final class KicUiText {
     public static List<String> costLines(ServerPlayer player, boolean blessing, String id) {
         return CurseBlessingService.activationCosts(player, blessing, id).stream().map(cost -> {
             int owned = CurseBlessingService.availableCost(player, cost);
-            String name = cost.influence() ? (cost.reputation() ? "Reputation" : "Infamy")
-                : (cost.item() == net.minecraft.world.item.Items.ENCHANTED_BOOK ? "Sharpness V book" : new net.minecraft.world.item.ItemStack(cost.item()).getHoverName().getString());
+            String name = cost.karma() ? "Karma (consumed toward zero)" : cost.influence() ? (cost.reputation() ? "Reputation" : "Infamy")
+                : (cost.item() == net.minecraft.world.item.Items.ENCHANTED_BOOK ? "Sharpness V book" : net.minecraft.network.chat.Component.translatable(cost.item().getDescriptionId()).getString());
             return (owned >= cost.count() ? "Ready: " : "Missing: ") + name + " " + owned + "/" + cost.count();
         }).toList();
     }
     public static String projectedEffect(ServerPlayer player, boolean blessing, String id, String description) {
         int next = (blessing ? CurseBlessingService.storedStack(player, true, id) : CurseBlessingService.storedStack(player, false, id)) + 1;
         if (blessing && id.equals("protection")) return "Next stack: +" + (2 * Math.min(2,next)) + " total armor. Adds 5 minutes.";
-        if (blessing && id.equals("hunter")) return "Next stack: +" + (5 * Math.min(2,next)) + "% damage against hostile mobs.";
+        if (blessing && id.equals("hunter")) return "Next stack: +" + (5 * Math.min(4,next)) + "% damage against hostile mobs.";
         if (blessing && id.equals("haste")) return "Next stack: " + (next >= 3 ? "Haste II" : "Haste I") + ". Adds 3 minutes.";
         if (!blessing && id.equals("fettered")) return "Next stack: +" + (int)Math.floor(2 + 1.5 * (Math.min(4,next)-1)) + " total armor; " + (next >= 3 ? "-10%" : "-5%") + " total movement speed.\nKnockback resistance: +30%. Jump strength: -0.20.";
         if (!blessing && ("justice".equals(id) || "strength".equals(id))) {
             double damage = next * ("justice".equals(id) ? 1.0 : 0.5);
             return "After activation: +" + damage + " damage dealt and +" + damage + " damage taken.";
         }
+        if(blessing && id.equals("preservation"))return "20% less durability loss after Unbreaking. Adds 15 minutes; remains one stack.";
+        if(blessing && id.equals("aegis"))return "10% chance to halve damage for 1.5s. Cooldown: "+(next>=2?10:15)+"s. Shield sound on mitigation.";
+        if(blessing && id.equals("unseen_hand"))return "Block reach +"+(next>=2?"0.75":"0.5")+"; entity reach +"+(next>=2?"0.5":"0.25")+". Adds 10 minutes; highest bonus wins with Hollow.";
         return "Effect after activation: " + description;
     }
     public static String commitmentWarning(boolean blessing, String id) {

@@ -171,7 +171,7 @@ public final class BedrockKicUI {
     }
 
     private static void simple(ServerPlayer player, String title, String content, List<Choice> choices) {
-        SimpleForm.Builder form = SimpleForm.builder().title(title).content(content);
+        SimpleForm.Builder form = SimpleForm.builder().title("§6"+title+"§r").content(KicUiText.formText(content));
         List<Choice> stableChoices = List.copyOf(choices);
         for (Choice choice : stableChoices) {
             form.button(choice.label(), FormImage.Type.PATH, choice.icon());
